@@ -3,6 +3,8 @@ package com.ronald.proyecto.proyecto_uni.service.impl;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,11 +39,6 @@ public class UserServiceImpl implements UserService {
     public List<User> findAll() {
 
         List<User> users = userRepository.findAll();
-
-        if (users.isEmpty()) {
-            throw new EntityNotFoundException("No hay datos disponibles");
-        }
-
         return users;
     }
 
@@ -55,18 +52,18 @@ public class UserServiceImpl implements UserService {
     @Override
     public User findById(Integer id) {
 
+        if (id == null) {
+            throw new IllegalArgumentException("El id no puede ser nulo");
+        }
+
         User userExist = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("No existe el usuario con el id: " + id));
+                .orElseThrow(() -> new EntityNotFoundException("No existe el usuario con el id: " + id));
         return userExist;
     }
 
     @Transactional
     @Override
     public User save(User user) {
-
-        if (user == null) {
-            throw new IllegalArgumentException("El usuario no puede ser nulo");
-        }
 
         List<Role> roles = getRoles(user);
 
@@ -79,8 +76,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public User actualizarPagina(UserRequest user, Integer id) {
 
-        if (user == null || id == null) {
-            throw new IllegalArgumentException("Los datos del usuario no pueden ser nulos");
+        if (id == null) {
+            throw new IllegalArgumentException("El id no puede ser null");
         }
 
         Optional<User> userExist = userRepository.findById(id);
@@ -127,6 +124,14 @@ public class UserServiceImpl implements UserService {
             roleOptionalAdmin.ifPresent(roles::add);
         }
         return roles;
+    }
+
+
+    public User getUserProfile(Authentication authentication) {
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        return user;
     }
 
 }

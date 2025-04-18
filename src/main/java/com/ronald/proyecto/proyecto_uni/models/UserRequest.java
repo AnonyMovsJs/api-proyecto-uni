@@ -3,7 +3,6 @@ package com.ronald.proyecto.proyecto_uni.models;
 import jakarta.persistence.Column;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 public class UserRequest implements UserIsAdmin { // El userIsAdmin para los roles para que no haya problema en el save
                                                   // y update
@@ -20,11 +19,6 @@ public class UserRequest implements UserIsAdmin { // El userIsAdmin para los rol
     @NotBlank
     @Email
     private String email;
-
-    @Column(name = "username", unique = true, nullable = false)
-    @NotBlank
-    @Size(min = 4, max = 12)
-    private String username;
 
     private boolean admin;
 
@@ -52,13 +46,6 @@ public class UserRequest implements UserIsAdmin { // El userIsAdmin para los rol
         this.email = email;
     }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
 
     public boolean isAdmin() {
         return admin;

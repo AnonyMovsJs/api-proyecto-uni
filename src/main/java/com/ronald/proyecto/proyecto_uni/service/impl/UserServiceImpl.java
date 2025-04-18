@@ -94,7 +94,6 @@ public class UserServiceImpl implements UserService {
         userActualizado.setName(user.getName());
         userActualizado.setLastname(user.getLastname());
         userActualizado.setEmail(user.getEmail());
-        userActualizado.setUsername(user.getUsername());
 
         List<Role> roles = getRoles(user);
 

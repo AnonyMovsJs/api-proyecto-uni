@@ -18,7 +18,6 @@ import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "user")
@@ -41,11 +40,6 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
     @NotBlank
     @Email
     private String email;
-
-    @Column(name = "username", unique = true, nullable = false)
-    @NotBlank
-    @Size(min = 4, max = 12)
-    private String username;
 
     @Transient
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
@@ -95,13 +89,6 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
         this.email = email;
     }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
 
     public String getPassword() {
         return password;

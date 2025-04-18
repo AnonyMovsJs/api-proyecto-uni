@@ -64,10 +64,10 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     @Override
-    public User save(User user) {
+    public User save(UserRequest userRequest) {
 
-        String emailName = user.getName().toLowerCase().replaceAll("\\s+", "");
-        String emailLastname = user.getLastname().toLowerCase().replaceAll("\\s+", "");
+        String emailName = userRequest.getName().toLowerCase().replaceAll("\\s+", "");
+        String emailLastname = userRequest.getLastname().toLowerCase().replaceAll("\\s+", "");
         String generatedEmail = String.format("%s.%s@empresa.com", emailName, emailLastname);
         
         if (userRepository.findByEmail(generatedEmail).isPresent()) {
@@ -76,25 +76,25 @@ public class UserServiceImpl implements UserService {
             generatedEmail = String.format("%s.%s%d@empresa.com", emailName, emailLastname, randomNum);
         }
         
-        String generatedPassword = user.getDni();
+        String generatedPassword = userRequest.getDni();
         
-        User newUser = new User();
-        newUser.setName(user.getName());
-        newUser.setLastname(user.getLastname());
-        newUser.setDni(user.getDni());
-        newUser.setPhone(user.getPhone());
-        newUser.setAddress(user.getAddress());
-        newUser.setEmail(generatedEmail);
+        User userSave = new User();
+        userSave.setName(userRequest.getName());
+        userSave.setLastname(userRequest.getLastname());
+        userSave.setDni(userRequest.getDni());
+        userSave.setPhone(userRequest.getPhone());
+        userSave.setAddress(userRequest.getAddress());
+        userSave.setEmail(generatedEmail);
 
-        List<Role> roles = getRoles(newUser);
-        newUser.setRoles(roles);
-        newUser.setPassword(passwordEncoder.encode(generatedPassword));
-        return userRepository.save(newUser);
+        List<Role> roles = getRoles(userRequest);
+        userSave.setRoles(roles);
+        userSave.setPassword(passwordEncoder.encode(generatedPassword));
+        return userRepository.save(userSave);
     }
 
     @Transactional
     @Override
-    public User actualizarPagina(UserRequest user, Integer id) {
+    public User actualizarPagina(UserRequest userRequest, Integer id) {
 
         if (id == null) {
             throw new IllegalArgumentException("El id no puede ser null");
@@ -108,11 +108,13 @@ public class UserServiceImpl implements UserService {
 
         User userActualizado = userExist.get();
 
-        userActualizado.setName(user.getName());
-        userActualizado.setLastname(user.getLastname());
-        userActualizado.setEmail(user.getEmail());
+        userActualizado.setName(userRequest.getName());
+        userActualizado.setLastname(userRequest.getLastname());
+        userActualizado.setDni(userRequest.getDni());
+        userActualizado.setPhone(userRequest.getPhone());
+        userActualizado.setAddress(userRequest.getAddress());
 
-        List<Role> roles = getRoles(user);
+        List<Role> roles = getRoles(userRequest);
 
         userActualizado.setRoles(roles);
         return userRepository.save(userActualizado);

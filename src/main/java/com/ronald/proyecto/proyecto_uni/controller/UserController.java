@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ronald.proyecto.proyecto_uni.entity.User;
 import com.ronald.proyecto.proyecto_uni.models.UserRequest;
 import com.ronald.proyecto.proyecto_uni.service.UserService;
 
@@ -39,13 +38,13 @@ public class UserController {
     }
 
     @PostMapping()
-    public ResponseEntity<Object> save(@Valid @RequestBody User user) {
-            return ResponseEntity.status(HttpStatus.CREATED).body(userService.save(user));
+    public ResponseEntity<Object> save(@Valid @RequestBody UserRequest userRequest) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(userService.save(userRequest));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Object> actualizarUsuario(@Valid @RequestBody UserRequest user, @PathVariable Integer id) {
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(userService.actualizarPagina(user, id));
+    public ResponseEntity<Object> actualizarUsuario(@Valid @RequestBody UserRequest userRequest, @PathVariable Integer id) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(userService.actualizarPagina(userRequest, id));
     }
 
     @DeleteMapping("/{id}")

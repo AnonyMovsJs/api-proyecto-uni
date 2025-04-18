@@ -1,8 +1,8 @@
 package com.ronald.proyecto.proyecto_uni.models;
 
 import jakarta.persistence.Column;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 public class UserRequest implements UserIsAdmin { // El userIsAdmin para los roles para que no haya problema en el save
                                                   // y update
@@ -15,10 +15,19 @@ public class UserRequest implements UserIsAdmin { // El userIsAdmin para los rol
     @NotBlank
     private String lastname;
 
-    @Column(name = "email", unique = true, nullable = false)
-    @NotBlank
-    @Email
-    private String email;
+    @Column(name = "dni")
+    @NotBlank()
+    @Pattern(regexp = "^[0-9]{8}$", message = "El DNI debe tener 8 dígitos numéricos")
+    private String dni;
+
+    @Column(name = "phone")
+    @NotBlank()
+    @Pattern(regexp = "^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos")
+    private String phone;
+
+    @Column(name = "address")
+    @NotBlank()
+    private String address;
 
     private boolean admin;
 
@@ -38,14 +47,29 @@ public class UserRequest implements UserIsAdmin { // El userIsAdmin para los rol
         this.lastname = lastname;
     }
 
-    public String getEmail() {
-        return email;
+    public String getDni() {
+        return dni;
     }
 
-    public void setEmail(String email) {
-        this.email = email;
+    public void setDni(String dni) {
+        this.dni = dni;
     }
 
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
 
     public boolean isAdmin() {
         return admin;

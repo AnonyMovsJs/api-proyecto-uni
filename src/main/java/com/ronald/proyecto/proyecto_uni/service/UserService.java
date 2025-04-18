@@ -14,7 +14,7 @@ public interface UserService {
 
     User findById(Integer id);
 
-    User save(User user);
+    User save(UserRequest userRequest);
 
     User actualizarPagina(UserRequest user, Integer id);
 

@@ -12,6 +12,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     /* @SuppressWarnings("null")
     Page<User> findAll(Pageable pageable); */
 
+    
     Optional<User> findByEmail(String email);
 
 }

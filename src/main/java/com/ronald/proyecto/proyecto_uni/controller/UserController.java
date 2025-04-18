@@ -7,6 +7,8 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ronald.proyecto.proyecto_uni.entity.User;
 import com.ronald.proyecto.proyecto_uni.models.UserRequest;
+import com.ronald.proyecto.proyecto_uni.repository.UserRepository;
 import com.ronald.proyecto.proyecto_uni.service.UserService;
 
 import jakarta.validation.Valid;
@@ -31,6 +34,9 @@ public class UserController {
 
     @Autowired
     UserService userService;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @GetMapping()
     public ResponseEntity<Object> findAll() {
@@ -108,6 +114,15 @@ public class UserController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+
+    @GetMapping("/profile")
+    public ResponseEntity<?> getCurrentUserProfile(Authentication authentication) {
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
+        return ResponseEntity.ok(user);
     }
 
     private ResponseEntity<Object> validation(BindingResult result) {

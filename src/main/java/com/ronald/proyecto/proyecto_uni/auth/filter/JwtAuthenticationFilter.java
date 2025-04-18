@@ -41,12 +41,12 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
     public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
             throws AuthenticationException {
 
-        String username = null;
+        String email = null;
         String password = null;
 
         try {
             User user = new ObjectMapper().readValue(request.getInputStream(), User.class);
-            username = user.getUsername(); 
+            email = user.getEmail(); 
             password = user.getPassword(); 
         } catch (StreamReadException e) {
             e.printStackTrace(); 
@@ -56,7 +56,7 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
             e.printStackTrace();
         }
 
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(username,
+        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(email,
                 password);
 
         return this.authenticationManager.authenticate(authenticationToken); 
@@ -68,7 +68,7 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
 
         org.springframework.security.core.userdetails.User user = (org.springframework.security.core.userdetails.User) authResult
                 .getPrincipal();
-        String username = user.getUsername();
+        String email = user.getUsername();
         Collection<? extends GrantedAuthority> roles = authResult.getAuthorities();
         boolean isAdmin = roles.stream().anyMatch(role -> role.getAuthority().equals("ROLE_ADMIN")); 
                                                                                                      
@@ -77,13 +77,13 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
                 .claims()
                 .add("authorities", new ObjectMapper().writeValueAsString(roles)) 
                                                                                  
-                .add("username", username) 
+                .add("email", email) 
                 .add("isAdmin", isAdmin)
                 .build(); 
 
         // Generamos el token JWT
         String jwt = Jwts.builder()
-                .subject(username) 
+                .subject(email) 
                 .claims(claims) 
                 .signWith(SECRET_KEY)
                 .issuedAt(new Date()) 
@@ -94,8 +94,8 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
 
         Map<String, String> body = new HashMap<>();
         body.put("token", jwt); 
-        body.put("username", username); 
-        body.put("message", String.format("Hola %s has iniciado sesión con éxito", username));
+        body.put("email", email); 
+        body.put("message", String.format("Hola %s has iniciado sesión con éxito", email));
 
         response.getWriter().write(new ObjectMapper().writeValueAsString(body));
         response.setContentType("application/json"); 
@@ -108,7 +108,7 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
 
         Map<String, String> body = new HashMap<>();
 
-        body.put("message", "Error en la autenticación con username o password incorrecto!");
+        body.put("message", "Error en la autenticación con email o password incorrecto!");
         body.put("error", failed.getMessage());
 
         response.getWriter().write(new ObjectMapper().writeValueAsString(body));

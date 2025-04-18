@@ -24,12 +24,12 @@ public class JpaUserDetailsService implements UserDetailsService {
 
     @Transactional(readOnly = true)
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
 
-        Optional<User> optionalUser = userRepository.findByUsername(username);
+        Optional<User> optionalUser = userRepository.findByEmail(email);
 
         if (optionalUser.isEmpty()) {
-            throw new UsernameNotFoundException(String.format("Username %s no encontrado", username));
+            throw new UsernameNotFoundException(String.format("Email %s no encontrado", email));
         }
 
         User user = optionalUser.orElseThrow();
@@ -40,7 +40,7 @@ public class JpaUserDetailsService implements UserDetailsService {
                 .collect(Collectors.toList());
 
         return new org.springframework.security.core.userdetails.User(
-                username, 
+                email, 
                 user.getPassword(),
                 true, 
                 true, 

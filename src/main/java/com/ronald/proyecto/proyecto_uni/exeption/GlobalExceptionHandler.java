@@ -31,7 +31,7 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new HashMap<>();
 
         ex.getBindingResult().getFieldErrors().forEach(error -> {
-            errors.put(error.getField(), "El campo " + error.getField() + error.getDefaultMessage());
+            errors.put(error.getField(), "El campo " + error.getField() + " " + error.getDefaultMessage());
         });
 
         return ResponseEntity.badRequest().body(errors);

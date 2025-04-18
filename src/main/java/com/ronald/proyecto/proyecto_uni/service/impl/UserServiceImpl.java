@@ -3,6 +3,7 @@ package com.ronald.proyecto.proyecto_uni.service.impl;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -65,11 +66,30 @@ public class UserServiceImpl implements UserService {
     @Override
     public User save(User user) {
 
-        List<Role> roles = getRoles(user);
+        String emailName = user.getName().toLowerCase().replaceAll("\\s+", "");
+        String emailLastname = user.getLastname().toLowerCase().replaceAll("\\s+", "");
+        String generatedEmail = String.format("%s.%s@empresa.com", emailName, emailLastname);
+        
+        if (userRepository.findByEmail(generatedEmail).isPresent()) {
+            Random random = new Random();
+            int randomNum = random.nextInt(1000);
+            generatedEmail = String.format("%s.%s%d@empresa.com", emailName, emailLastname, randomNum);
+        }
+        
+        String generatedPassword = user.getDni();
+        
+        User newUser = new User();
+        newUser.setName(user.getName());
+        newUser.setLastname(user.getLastname());
+        newUser.setDni(user.getDni());
+        newUser.setPhone(user.getPhone());
+        newUser.setAddress(user.getAddress());
+        newUser.setEmail(generatedEmail);
 
-        user.setRoles(roles);
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        return userRepository.save(user);
+        List<Role> roles = getRoles(newUser);
+        newUser.setRoles(roles);
+        newUser.setPassword(passwordEncoder.encode(generatedPassword));
+        return userRepository.save(newUser);
     }
 
     @Transactional

@@ -16,8 +16,8 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 @Entity
 @Table(name = "user")
@@ -36,17 +36,31 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
     @NotBlank
     private String lastname;
 
-    @Column(name = "email", unique = true, nullable = false)
-    @NotBlank
-    @Email
+    @Column(name = "dni")
+    @NotBlank()
+    @Pattern(regexp = "^[0-9]{8}$", message = "El DNI debe tener 8 dígitos numéricos")
+    private String dni;
+
+    @Column(name = "phone")
+    @NotBlank()
+    @Pattern(regexp = "^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos")
+    private String phone;
+
+    @Column(name = "address")
+    @NotBlank()
+    private String address;
+
+    @Column(name = "email", unique = true/* , nullable = false */)
+    /* @NotBlank
+    @Email */
     private String email;
 
     @Transient
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private boolean admin;
 
-    @Column(name = "password", nullable = false)
-    @NotBlank
+    @Column(name = "password"/* , nullable = false */)
+    /* @NotBlank */
     private String password;
 
     @ManyToMany
@@ -79,6 +93,31 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
 
     public void setLastname(String lastname) {
         this.lastname = lastname;
+    }
+
+
+    public String getDni() {
+        return dni;
+    }
+
+    public void setDni(String dni) {
+        this.dni = dni;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
     }
 
     public String getEmail() {

@@ -63,6 +63,9 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
     /* @NotBlank */
     private String password;
 
+    @Column(name = "estado")
+    private boolean estado;
+
     @ManyToMany
     @JoinTable(name = "users_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"), uniqueConstraints = @UniqueConstraint(columnNames = {
             "user_id", "role_id" }))
@@ -152,5 +155,15 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
     public void setAdmin(boolean admin) {
         this.admin = admin;
     }
+
+    public boolean isEstado() {
+        return estado;
+    }
+
+    public void setEstado(boolean estado) {
+        this.estado = estado;
+    }
+
+    
 
 }

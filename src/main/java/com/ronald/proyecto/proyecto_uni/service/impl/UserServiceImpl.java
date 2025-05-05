@@ -128,11 +128,15 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("El id no puede ser nulo");
         }
 
-        if (!userRepository.existsById(id)) {
+        Optional<User> userExist = userRepository.findById(id);
+
+        if (userExist.isEmpty()) {
             throw new EntityNotFoundException("No existe un usuario con id: " + id);
         }
 
-        userRepository.deleteById(id);
+        User userToggle = userExist.get();
+        userToggle.setEstado(!userToggle.isEstado());
+        userRepository.save(userToggle);
     }
 
 

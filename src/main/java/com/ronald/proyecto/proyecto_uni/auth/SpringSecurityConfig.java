@@ -47,12 +47,26 @@ public class SpringSecurityConfig {
 
                 .authorizeHttpRequests(authz -> authz
 
+                        //USERS-----------------------------------------------------------
                         .requestMatchers(HttpMethod.GET, "/api/users", "/api/users/page/{page}").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users/{id}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users/profile").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/users").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/users/{id}").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/users/{id}").hasRole("ADMIN")
+                        //VENTAS-----------------------------------------------------------
+                        .requestMatchers(HttpMethod.POST, "/api/ventas").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/ventas/cliente/{clienteId}").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/ventas/{ventaId}").hasAnyRole("USER","ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/ventas//{ventaId}/detalles").hasAnyRole("USER", "ADMIN")
+                        //CRÉDITOS----------------------------------------------------------
+                        .requestMatchers(HttpMethod.GET, "/api/creditos/cliente/{clienteId}").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/creditos/venta/{ventaId}").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/creditos/{creditoId}/cuotas").hasAnyRole("USER", "ADMIN")
+                        //PAGOS-------------------------------------------------------------
+                        .requestMatchers(HttpMethod.POST, "/api/pagos").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/pagos/cuota/{cuotaId}").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/pagos/cliente/{clienteId}").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated())
                 .cors(cors -> cors.configurationSource(configurationSource()))
                 .addFilter(new JwtAuthenticationFilter(authenticationManager()))

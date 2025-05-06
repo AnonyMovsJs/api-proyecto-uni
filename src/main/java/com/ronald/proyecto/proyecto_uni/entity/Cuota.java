@@ -5,6 +5,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -27,6 +30,7 @@ public class Cuota {
 
     @ManyToOne
     @JoinColumn(name = "credito_id", nullable = false)
+    @JsonBackReference("credito-cuotas")
     private Credito credito;
 
     @Column(nullable = false)
@@ -43,6 +47,7 @@ public class Cuota {
     private EstadoCuota estado;
 
     @OneToMany(mappedBy = "cuota", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("cuota-pagos")
     private List<Pago> pagos = new ArrayList<>();
 
     public enum EstadoCuota {

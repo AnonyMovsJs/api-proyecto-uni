@@ -3,6 +3,8 @@ package com.ronald.proyecto.proyecto_uni.service.impl;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.stereotype.Service;
+
 import com.ronald.proyecto.proyecto_uni.dto.PagoDTO;
 import com.ronald.proyecto.proyecto_uni.entity.Credito;
 import com.ronald.proyecto.proyecto_uni.entity.Cuota;
@@ -12,10 +14,12 @@ import com.ronald.proyecto.proyecto_uni.repository.CreditoRepository;
 import com.ronald.proyecto.proyecto_uni.repository.CuotaRepository;
 import com.ronald.proyecto.proyecto_uni.repository.PagoRepository;
 import com.ronald.proyecto.proyecto_uni.repository.VentaRepository;
+import com.ronald.proyecto.proyecto_uni.service.PagoService;
 
 import jakarta.transaction.Transactional;
 
-public class PagoServiceImpl {
+@Service
+public class PagoServiceImpl implements PagoService{
 
     private final PagoRepository pagoRepository;
     private final CuotaRepository cuotaRepository;

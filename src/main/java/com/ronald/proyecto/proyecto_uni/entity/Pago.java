@@ -3,6 +3,8 @@ package com.ronald.proyecto.proyecto_uni.entity;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -21,6 +23,7 @@ public class Pago {
 
     @ManyToOne
     @JoinColumn(name = "cuota_id", nullable = false)
+    @JsonBackReference("cuota-pagos")
     private Cuota cuota;
 
     @Column(nullable = false)

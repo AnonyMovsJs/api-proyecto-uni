@@ -96,8 +96,22 @@ public class CreditoServiceImpl implements CreditoService{
     }
     
     public List<Cuota> obtenerCuotasPorCredito(Long creditoId) {
-        return cuotaRepository.findByCreditoId(creditoId);
+        List<Cuota> cuotas = cuotaRepository.findByCreditoId(creditoId);
+
+        // Log para depuración
+        System.out.println("Obteniendo cuotas para crédito ID: " + creditoId);
+        System.out.println("Número de cuotas encontradas: " + cuotas.size());
+
+        for (Cuota cuota : cuotas) {
+            System.out.println("Cuota #" + cuota.getNumeroCuota() +
+                    " - Monto: " + cuota.getMonto() +
+                    " - Estado: " + cuota.getEstado() +
+                    " - Fecha vencimiento: " + cuota.getFechaVencimiento());
+        }
+
+        return cuotas;
     }
+    
     
     // Método para verificar cuotas vencidas (se puede programar para ejecutar diariamente)
     @Scheduled(cron = "0 0 0 * * ?") // Ejecutar todos los días a medianoche

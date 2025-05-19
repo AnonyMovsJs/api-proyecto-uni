@@ -67,6 +67,9 @@ public class SpringSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/pagos").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/pagos/cuota/{cuotaId}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/pagos/cliente/{clienteId}").hasAnyRole("USER", "ADMIN")
+                        // CHATBOT--------------------------------------------------------
+                        .requestMatchers(HttpMethod.POST, "/api/chatbot/message").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/ws-chatbot/**").permitAll() // Para WebSockets
                         .anyRequest().authenticated())
                 .cors(cors -> cors.configurationSource(configurationSource()))
                 .addFilter(new JwtAuthenticationFilter(authenticationManager()))

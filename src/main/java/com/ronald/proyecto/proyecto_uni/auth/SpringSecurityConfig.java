@@ -70,6 +70,9 @@ public class SpringSecurityConfig {
                         // CHATBOT--------------------------------------------------------
                         .requestMatchers(HttpMethod.POST, "/api/chatbot/message").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/ws-chatbot/**").permitAll() // Para WebSockets
+
+                        //SMS AUTH------------------------------------------------------
+                        .requestMatchers(HttpMethod.POST, "/api/auth/verify-sms").permitAll()
                         .anyRequest().authenticated())
                 .cors(cors -> cors.configurationSource(configurationSource()))
                 .addFilter(new JwtAuthenticationFilter(authenticationManager()))

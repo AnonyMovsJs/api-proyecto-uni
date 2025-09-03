@@ -1,5 +1,6 @@
 package com.ronald.proyecto.proyecto_uni.entity;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -18,6 +19,7 @@ import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+
 
 @Entity
 @Table(name = "user")
@@ -45,6 +47,19 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
     @NotBlank()
     @Pattern(regexp = "^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos")
     private String phone;
+
+    /* PASO 3 TWILIO */
+    @Column(name = "sms_code")
+    private String smsCode;
+
+    @Column(name = "sms_code_expiry")
+    private LocalDateTime smsCodeExpiry;
+
+    @Column(name = "sms_verified")
+    private boolean smsVerified = false;
+
+    @Column(name = "temp_token")
+    private String tempToken;
 
     @Column(name = "address")
     @NotBlank()
@@ -113,6 +128,38 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getSmsCode() {
+        return smsCode;
+    }
+
+    public void setSmsCode(String smsCode) {
+        this.smsCode = smsCode;
+    }
+
+    public LocalDateTime getSmsCodeExpiry() {
+        return smsCodeExpiry;
+    }
+
+    public void setSmsCodeExpiry(LocalDateTime smsCodeExpiry) {
+        this.smsCodeExpiry = smsCodeExpiry;
+    }
+
+    public boolean isSmsVerified() {
+        return smsVerified;
+    }
+
+    public void setSmsVerified(boolean smsVerified) {
+        this.smsVerified = smsVerified;
+    }
+
+    public String getTempToken() {
+        return tempToken;
+    }
+
+    public void setTempToken(String tempToken) {
+        this.tempToken = tempToken;
     }
 
     public String getAddress() {

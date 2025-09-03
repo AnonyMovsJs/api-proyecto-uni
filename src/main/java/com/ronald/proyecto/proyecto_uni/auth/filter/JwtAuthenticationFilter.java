@@ -2,7 +2,6 @@ package com.ronald.proyecto.proyecto_uni.auth.filter;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,14 +17,16 @@ import com.fasterxml.jackson.databind.DatabindException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ronald.proyecto.proyecto_uni.entity.User;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
+// Agrega estos imports a tu JwtAuthenticationFilter
+import org.springframework.context.ApplicationContext;
+import org.springframework.web.context.support.WebApplicationContextUtils;
+import com.ronald.proyecto.proyecto_uni.service.impl.SmsService;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import static com.ronald.proyecto.proyecto_uni.auth.TokenJwtConfig.*;
 
 public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
 
@@ -62,6 +63,8 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
         return this.authenticationManager.authenticate(authenticationToken); 
     }
 
+    // Reemplaza el método successfulAuthentication completo PASO 5, EL CLAIMS, JWT LO HAREMOS EN EL METODO AuthController.verifySms() → Genera el JWT final:
+    // Es una separación correcta de responsabilidades. ❌ NO generar JWT (eso lo hace AuthController)
     @Override
     protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain,
             Authentication authResult) throws IOException, ServletException {
@@ -70,36 +73,49 @@ public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilte
                 .getPrincipal();
         String email = user.getUsername();
         Collection<? extends GrantedAuthority> roles = authResult.getAuthorities();
-        boolean isAdmin = roles.stream().anyMatch(role -> role.getAuthority().equals("ROLE_ADMIN")); 
-                                                                                                     
-                                                                                                    
-        Claims claims = Jwts
-                .claims()
-                .add("authorities", new ObjectMapper().writeValueAsString(roles)) 
-                                                                                 
-                .add("email", email) 
-                .add("isAdmin", isAdmin)
-                .build(); 
+        boolean isAdmin = roles.stream().anyMatch(role -> role.getAuthority().equals("ROLE_ADMIN"));
 
-        // Generamos el token JWT
-        String jwt = Jwts.builder()
-                .subject(email) 
-                .claims(claims) 
-                .signWith(SECRET_KEY)
-                .issuedAt(new Date()) 
-                .expiration(new Date(System.currentTimeMillis() + 3600000)) 
-                .compact(); 
+        // Obtener el SmsService desde el contexto de Spring
+        ApplicationContext context = WebApplicationContextUtils.getWebApplicationContext(request.getServletContext());
+        if (context == null) {
+            Map<String, String> body = new HashMap<>();
+            body.put("message", "Error interno: contexto de aplicación no disponible");
+            body.put("error", "CONTEXT_NULL");
+            response.getWriter().write(new ObjectMapper().writeValueAsString(body));
+            response.setContentType("application/json");
+            response.setStatus(500);
+            return;
+        }
+        SmsService smsService = context.getBean(SmsService.class);
 
-        response.addHeader("Authorization", "Bearer " + jwt);
+        // Enviar código SMS
+        boolean smsEnviado = smsService.sendSmsCode(email);
 
-        Map<String, String> body = new HashMap<>();
-        body.put("token", jwt); 
-        body.put("email", email); 
-        body.put("message", String.format("Hola %s has iniciado sesión con éxito", email));
+        if (!smsEnviado) {
+            // Error al enviar SMS
+            Map<String, String> body = new HashMap<>();
+            body.put("message", "Error al enviar código SMS");
+            body.put("error", "SMS_ERROR");
+            response.getWriter().write(new ObjectMapper().writeValueAsString(body));
+            response.setContentType("application/json");
+            response.setStatus(500);
+            return;
+        }
+
+        // Generar token temporal (no es el JWT final)
+        String tempToken = java.util.UUID.randomUUID().toString();
+
+        // Respuesta indicando que debe verificar SMS
+        Map<String, Object> body = new HashMap<>();
+        body.put("requiresSms", true);
+        body.put("tempToken", tempToken);
+        body.put("email", email);
+        body.put("isAdmin", isAdmin);
+        body.put("message", "Se ha enviado un código SMS a tu teléfono");
 
         response.getWriter().write(new ObjectMapper().writeValueAsString(body));
-        response.setContentType("application/json"); 
-        response.setStatus(200); 
+        response.setContentType("application/json");
+        response.setStatus(200);
     }
 
     @Override

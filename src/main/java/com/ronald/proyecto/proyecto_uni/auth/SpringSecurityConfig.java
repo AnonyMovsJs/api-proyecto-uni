@@ -73,6 +73,7 @@ public class SpringSecurityConfig {
 
                         //SMS AUTH------------------------------------------------------
                         .requestMatchers(HttpMethod.POST, "/api/auth/verify-sms").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/send-whatsapp").permitAll()
                         .anyRequest().authenticated())
                 .cors(cors -> cors.configurationSource(configurationSource()))
                 .addFilter(new JwtAuthenticationFilter(authenticationManager()))

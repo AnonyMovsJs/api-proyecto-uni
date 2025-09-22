@@ -41,8 +41,8 @@ public class JwtValidationFilter extends BasicAuthenticationFilter {
         System.out.println("JwtValidationFilter - URI: " + requestURI);
 
         // Si es la ruta de verificación SMS, saltar validación
-        if (requestURI.equals("/api/auth/verify-sms")) {
-            System.out.println("Saltando validación JWT para verify-sms");
+        if (requestURI.equals("/api/auth/verify-sms") || requestURI.equals("/api/auth/send-whatsapp")) {
+            System.out.println("Saltando validación JWT para " + requestURI);
             chain.doFilter(request, response);
             return;
         }

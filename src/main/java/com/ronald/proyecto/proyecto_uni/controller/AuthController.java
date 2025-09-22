@@ -37,6 +37,34 @@ public class AuthController {
     @Autowired
     private UserRepository userRepository;
 
+    @PostMapping("/send-whatsapp")
+    public ResponseEntity<?> sendWhatsApp(@RequestBody WhatsAppRequest request) {
+        try {
+            System.out.println("=== ENVIANDO CÓDIGO POR WHATSAPP ===");
+            System.out.println("Email: " + request.getEmail());
+
+            boolean sent = smsService.sendWhatsAppCode(request.getEmail());
+
+            Map<String, Object> response = new HashMap<>();
+            if (sent) {
+                response.put("success", true);
+                response.put("message", "Código enviado por WhatsApp");
+            } else {
+                response.put("success", false);
+                response.put("message", "Error al enviar código por WhatsApp");
+            }
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.out.println("Error enviando WhatsApp: " + e.getMessage());
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Error interno del servidor");
+            response.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
     @PostMapping("/verify-sms")
     public ResponseEntity<?> verifySms(@Valid @RequestBody SmsVerificationRequest request) {
         try {
@@ -147,7 +175,19 @@ public class AuthController {
                 .toList();
     }
 
-    // Clase interna para el request de verificación SMS
+    // Clases internas para requests
+    public static class WhatsAppRequest {
+        private String email;
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+    }
+
     public static class SmsVerificationRequest {
         private String email;
         private String code;

@@ -86,9 +86,3 @@ Ejecutá los siguientes comandos desde la terminal en la raíz del proyecto:
 La aplicación se iniciará por defecto en el puerto `8080`.
 
 ---
-
-## 🤝 Contribuciones y Contacto
-
-Desarrollado con dedicación por **Ronald Villacorta**.
-*   **LinkedIn:** [Tu Perfil de LinkedIn](https://www.linkedin.com/in/tu-perfil) *(¡Recordá actualizar este enlace!)*
-*   **GitHub:** [@tu-usuario-github](https://github.com/tu-usuario) *(¡Recordá actualizar este enlace!)*

@@ -36,8 +36,10 @@ public class CreditoServiceImpl implements CreditoService{
         Credito credito = new Credito();
         credito.setVenta(venta);
         
-        // Calcular monto total con interés (si hay)
-        BigDecimal interes = creditoDTO.getInteres() != null ? creditoDTO.getInteres() : BigDecimal.ZERO;
+        boolean esFiado = (venta.getTipoVenta() == Venta.TipoVenta.FIADO);
+
+        // En fiado no hay interés por defecto; en crédito se respeta el DTO
+        BigDecimal interes = (esFiado || creditoDTO.getInteres() == null) ? BigDecimal.ZERO : creditoDTO.getInteres();
         credito.setInteres(interes);
         
         BigDecimal montoTotal = venta.getMontoTotal();
@@ -49,21 +51,39 @@ public class CreditoServiceImpl implements CreditoService{
         }
         credito.setMontoTotal(montoTotal);
         
-        credito.setNumeroCuotas(creditoDTO.getNumeroCuotas());
+        int cuotas = (esFiado || creditoDTO.getNumeroCuotas() == null || creditoDTO.getNumeroCuotas() < 1) ? 1 : creditoDTO.getNumeroCuotas();
+        credito.setNumeroCuotas(cuotas);
         credito.setFechaInicio(LocalDate.now());
-        credito.setFechaFin(LocalDate.now().plusMonths(creditoDTO.getNumeroCuotas()));
+
+        if (esFiado) {
+            int dias = (creditoDTO.getPlazoDias() != null && creditoDTO.getPlazoDias() > 0) ? creditoDTO.getPlazoDias() : 30;
+            credito.setFechaFin(LocalDate.now().plusDays(dias));
+        } else {
+            credito.setFechaFin(LocalDate.now().plusMonths(cuotas));
+        }
         credito.setEstado(Credito.EstadoCredito.ACTIVO);
         
         Credito creditoGuardado = creditoRepository.save(credito);
         
-        // Generar cuotas
-        generarCuotas(creditoGuardado);
+        // Generar cuotas (1 para fiado con vencimiento = fechaFin, o N cuotas mensuales para crédito tradicional)
+        generarCuotas(creditoGuardado, esFiado);
         
         return creditoGuardado;
     }
     
-    private void generarCuotas(Credito credito) {
-        // Calcular monto por cuota
+    private void generarCuotas(Credito credito, boolean esFiado) {
+        if (esFiado) {
+            Cuota cuota = new Cuota();
+            cuota.setCredito(credito);
+            cuota.setNumeroCuota(1);
+            cuota.setMonto(credito.getMontoTotal());
+            cuota.setFechaVencimiento(credito.getFechaFin());
+            cuota.setEstado(Cuota.EstadoCuota.PENDIENTE);
+            cuotaRepository.save(cuota);
+            return;
+        }
+
+        // Calcular monto por cuota para crédito estándar
         BigDecimal montoPorCuota = credito.getMontoTotal()
             .divide(new BigDecimal(credito.getNumeroCuotas()), 2, RoundingMode.HALF_UP);
         

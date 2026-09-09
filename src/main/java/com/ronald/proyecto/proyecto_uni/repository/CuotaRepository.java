@@ -11,7 +11,8 @@ import com.ronald.proyecto.proyecto_uni.entity.Cuota;
 import com.ronald.proyecto.proyecto_uni.entity.User;
 
 public interface CuotaRepository extends JpaRepository<Cuota, Long>{
-    List<Cuota> findByCreditoId(Long creditoId);
+    @Query("SELECT c FROM Cuota c WHERE c.credito.id = :creditoId")
+    List<Cuota> findByCreditoId(@Param("creditoId") Long creditoId);
 
     List<Cuota> findByEstadoAndFechaVencimientoBefore(Cuota.EstadoCuota estado, LocalDate fecha);
 
@@ -28,5 +29,14 @@ public interface CuotaRepository extends JpaRepository<Cuota, Long>{
 
     @Query("SELECT c FROM Cuota c WHERE c.credito.venta.cliente.id = :clienteId AND c.estado = 'VENCIDO'")
     List<Cuota> findCuotasVencidasByClienteId(@Param("clienteId") Integer clienteId);
+
+    @Query("SELECT c FROM Cuota c WHERE c.credito.venta.cliente.id = :clienteId AND c.estado IN ('PENDIENTE', 'VENCIDO') ORDER BY c.credito.venta.fechaVenta ASC, c.id ASC")
+    List<Cuota> findCuotasActivasByClienteIdFIFO(@Param("clienteId") Long clienteId);
+
+    @Query("SELECT c FROM Cuota c WHERE c.credito.venta.cliente.id = :clienteId AND c.credito.venta.tipoVenta = 'FIADO' AND c.estado IN ('PENDIENTE', 'VENCIDO') ORDER BY c.credito.venta.fechaVenta ASC, c.id ASC")
+    List<Cuota> findCuotasActivasFiadoByClienteIdFIFO(@Param("clienteId") Long clienteId);
+
+    @Query("SELECT c FROM Cuota c WHERE c.credito.venta.cliente.id = :clienteId AND c.credito.venta.tipoVenta = 'CREDITO' AND c.estado IN ('PENDIENTE', 'VENCIDO') ORDER BY c.fechaVencimiento ASC, c.id ASC")
+    List<Cuota> findCuotasActivasCreditoByClienteIdFIFO(@Param("clienteId") Long clienteId);
 
 }

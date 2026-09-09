@@ -59,7 +59,7 @@ public class Venta {
     private Credito credito;
 
     public enum TipoVenta {
-        CONTADO, CREDITO
+        CONTADO, CREDITO, FIADO
     }
 
     public enum EstadoVenta {
@@ -138,5 +138,42 @@ public class Venta {
         this.credito = credito;
     }
 
-    
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public BigDecimal getTotalPagado() {
+        if (estado == EstadoVenta.PAGADO || tipoVenta == TipoVenta.CONTADO) {
+            return (montoTotal != null) ? montoTotal : BigDecimal.ZERO;
+        }
+        if (credito == null || credito.getCuotas() == null || credito.getCuotas().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal pendiente = BigDecimal.ZERO;
+        for (Cuota c : credito.getCuotas()) {
+            if (c.getEstado() != Cuota.EstadoCuota.PAGADO) {
+                pendiente = pendiente.add(c.getMonto());
+            }
+        }
+        BigDecimal total = (credito.getMontoTotal() != null) ? credito.getMontoTotal() : montoTotal;
+        if (total == null) return BigDecimal.ZERO;
+        BigDecimal pagado = total.subtract(pendiente);
+        return pagado.compareTo(BigDecimal.ZERO) > 0 ? pagado : BigDecimal.ZERO;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public BigDecimal getSaldoPendiente() {
+        if (estado == EstadoVenta.PAGADO || tipoVenta == TipoVenta.CONTADO) {
+            return BigDecimal.ZERO;
+        }
+        if (credito == null || credito.getCuotas() == null || credito.getCuotas().isEmpty()) {
+            return (montoTotal != null) ? montoTotal : BigDecimal.ZERO;
+        }
+        BigDecimal pendiente = BigDecimal.ZERO;
+        for (Cuota c : credito.getCuotas()) {
+            if (c.getEstado() != Cuota.EstadoCuota.PAGADO) {
+                pendiente = pendiente.add(c.getMonto());
+            }
+        }
+        return pendiente;
+    }
 }

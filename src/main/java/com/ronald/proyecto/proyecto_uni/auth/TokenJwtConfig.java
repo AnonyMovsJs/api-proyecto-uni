@@ -6,6 +6,8 @@ import io.jsonwebtoken.Jwts;
 
 public class TokenJwtConfig {
 
-    // Con esta llave secreta firmamos el token
-    public static final SecretKey SECRET_KEY = Jwts.SIG.HS256.key().build();
+    // Con esta llave secreta fija firmamos el token para que persista entre reinicios del servidor
+    public static final SecretKey SECRET_KEY = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+        "ClaveSecretaSuperSeguraParaProyectoUniConMasDe256Bits2025!".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+    );
 }

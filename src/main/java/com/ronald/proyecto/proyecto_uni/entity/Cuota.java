@@ -51,7 +51,7 @@ public class Cuota {
     private List<Pago> pagos = new ArrayList<>();
 
     public enum EstadoCuota {
-        PENDIENTE, PAGADO, VENCIDO
+        PENDIENTE, EN_REVISION, PAGADO, VENCIDO
     }
 
     public Long getId() {
@@ -68,6 +68,38 @@ public class Cuota {
 
     public void setCredito(Credito credito) {
         this.credito = credito;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public Long getCreditoId() {
+        return credito != null ? credito.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public Long getVentaId() {
+        return (credito != null && credito.getVenta() != null) ? credito.getVenta().getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getTipoVenta() {
+        return (credito != null && credito.getVenta() != null && credito.getVenta().getTipoVenta() != null)
+                ? credito.getVenta().getTipoVenta().name() : null;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getDescripcionVenta() {
+        return (credito != null && credito.getVenta() != null)
+                ? credito.getVenta().getDescripcion() : null;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public Integer getTotalCuotas() {
+        return (credito != null) ? credito.getNumeroCuotas() : null;
     }
 
     public Integer getNumeroCuota() {

@@ -23,6 +23,7 @@ import com.ronald.proyecto.proyecto_uni.service.impl.SmsService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import jakarta.validation.Valid;
+import org.springframework.transaction.annotation.Transactional;
 
 import static com.ronald.proyecto.proyecto_uni.auth.TokenJwtConfig.*;
 
@@ -65,6 +66,7 @@ public class AuthController {
         }
     }
 
+    @Transactional(readOnly = true)
     @PostMapping("/verify-sms")
     public ResponseEntity<?> verifySms(@Valid @RequestBody SmsVerificationRequest request) {
         try {

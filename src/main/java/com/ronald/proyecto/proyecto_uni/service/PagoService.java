@@ -9,7 +9,17 @@ public interface PagoService {
 
     Pago registrarPago(PagoDTO pagoDTO);
 
+    Pago registrarPagoConComprobante(Long cuotaId, org.springframework.web.multipart.MultipartFile comprobante);
+
+    Pago validarPago(Long pagoId, String nuevoEstado, String motivoRechazo);
+
     List<Pago> obtenerPagosPorCuota(Long cuotaId);
 
     List<Pago> obtenerPagosPorCliente(Long clienteId);
+
+    List<Pago> listarPagosPendientes();
+
+    List<Pago> listarTodosLosPagos();
+
+    Pago registrarAbonoFiado(Long clienteId, java.math.BigDecimal monto, org.springframework.web.multipart.MultipartFile comprobante, String tipoAbono);
 }

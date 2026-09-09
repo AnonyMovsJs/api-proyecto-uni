@@ -64,12 +64,19 @@ public class SpringSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/creditos/venta/{ventaId}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/creditos/{creditoId}/cuotas").hasAnyRole("USER", "ADMIN")
                         //PAGOS-------------------------------------------------------------
-                        .requestMatchers(HttpMethod.POST, "/api/pagos").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/pagos", "/api/pagos/yape").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/pagos/{pagoId}/validar").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/pagos/pendientes", "/api/pagos").hasRole("ADMIN")
+                        .requestMatchers("/api/pagos/config/telegram/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/pagos/cuota/{cuotaId}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/pagos/cliente/{clienteId}").hasAnyRole("USER", "ADMIN")
                         // CHATBOT--------------------------------------------------------
                         .requestMatchers(HttpMethod.POST, "/api/chatbot/message").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/ws-chatbot/**").permitAll() // Para WebSockets
+
+                        // NOTIFICACIONES-------------------------------------------------
+                        .requestMatchers(HttpMethod.POST, "/api/notificaciones").hasRole("ADMIN")
+                        .requestMatchers("/api/notificaciones/**").hasAnyRole("USER", "ADMIN")
 
                         //SMS AUTH------------------------------------------------------
                         .requestMatchers(HttpMethod.POST, "/api/auth/verify-sms").permitAll()
@@ -91,7 +98,7 @@ public class SpringSecurityConfig {
 
         config.setAllowedOrigins(Arrays.asList("http://localhost:4200"));
 
-        config.setAllowedMethods(Arrays.asList("POST", "GET", "PUT", "DELETE"));
+        config.setAllowedMethods(Arrays.asList("POST", "GET", "PUT", "DELETE", "PATCH", "OPTIONS"));
 
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
 

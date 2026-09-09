@@ -131,5 +131,21 @@ public class Credito {
         this.cuotas = cuotas;
     }
 
-    
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getTipoVenta() {
+        return (venta != null && venta.getTipoVenta() != null) ? venta.getTipoVenta().name() : null;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getDescripcionVenta() {
+        return (venta != null) ? venta.getDescripcion() : null;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public LocalDate getFechaVenta() {
+        return (venta != null) ? venta.getFechaVenta() : null;
+    }
 }

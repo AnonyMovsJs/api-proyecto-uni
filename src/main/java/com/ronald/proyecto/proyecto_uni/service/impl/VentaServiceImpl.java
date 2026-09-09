@@ -67,8 +67,8 @@ public class VentaServiceImpl implements VentaService{
             detalleVentaRepository.save(detalle);
         }
         
-        // Si es venta a crédito, crear crédito
-        if (ventaDTO.getTipoVenta() == Venta.TipoVenta.CREDITO) {
+        // Si es venta a crédito o fiado en cuenta corriente, crear crédito
+        if (ventaDTO.getTipoVenta() == Venta.TipoVenta.CREDITO || ventaDTO.getTipoVenta() == Venta.TipoVenta.FIADO) {
             creditoService.crearCredito(ventaGuardada, ventaDTO.getCreditoDTO());
         } else {
             // Si es al contado, marcar como pagado

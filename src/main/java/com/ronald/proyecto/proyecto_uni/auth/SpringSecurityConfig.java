@@ -48,6 +48,7 @@ public class SpringSecurityConfig {
                 .authorizeHttpRequests(authz -> authz
 
                         //USERS-----------------------------------------------------------
+                        .requestMatchers(HttpMethod.GET, "/api/users/consulta-dni/**", "/api/users/consulta-ruc/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users", "/api/users/page/{page}").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users/{id}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users/profile").hasAnyRole("USER", "ADMIN")

@@ -27,6 +27,19 @@ public class UserController {
     @Autowired
     UserService userService;
 
+    @Autowired
+    private com.ronald.proyecto.proyecto_uni.service.ApiPeruService apiPeruService;
+
+    @GetMapping("/consulta-dni/{dni}")
+    public ResponseEntity<?> consultarDni(@PathVariable String dni) {
+        return ResponseEntity.ok(apiPeruService.consultarDni(dni));
+    }
+
+    @GetMapping("/consulta-ruc/{ruc}")
+    public ResponseEntity<?> consultarRuc(@PathVariable String ruc) {
+        return ResponseEntity.ok(apiPeruService.consultarRuc(ruc));
+    }
+
     @GetMapping()
     public ResponseEntity<Object> findAll() {
             return ResponseEntity.ok(userService.findAll());

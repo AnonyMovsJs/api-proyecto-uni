@@ -40,13 +40,14 @@ public class PagoController {
         return new ResponseEntity<>(pago, HttpStatus.CREATED);
     }
 
-    // Subir comprobante Yape (Cliente)
+    // Subir comprobante (Yape, Plin, Transferencia, Tarjeta) (Cliente)
     @PostMapping("/yape")
     public ResponseEntity<?> registrarPagoYape(
             @RequestParam("cuotaId") Long cuotaId,
-            @RequestParam("comprobante") MultipartFile comprobante) {
+            @RequestParam("comprobante") MultipartFile comprobante,
+            @RequestParam(value = "metodoPago", required = false, defaultValue = "YAPE") String metodoPago) {
         try {
-            Pago pago = pagoService.registrarPagoConComprobante(cuotaId, comprobante);
+            Pago pago = pagoService.registrarPagoConComprobante(cuotaId, comprobante, metodoPago);
             return new ResponseEntity<>(pago, HttpStatus.CREATED);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

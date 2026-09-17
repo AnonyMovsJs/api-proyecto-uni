@@ -21,12 +21,10 @@ public class UserRequest implements UserIsAdmin { // El userIsAdmin para los rol
     private String dni;
 
     @Column(name = "phone")
-    @NotBlank()
-    @Pattern(regexp = "^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos")
+    @Pattern(regexp = "^$|^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos numéricos si se ingresa")
     private String phone;
 
     @Column(name = "address")
-    @NotBlank()
     private String address;
 
     private boolean admin;

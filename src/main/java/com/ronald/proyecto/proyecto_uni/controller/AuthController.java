@@ -139,7 +139,7 @@ public class AuthController {
                     .claims(claims)
                     .signWith(SECRET_KEY)
                     .issuedAt(new Date())
-                    .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1 hora
+                    .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME)) // 24 horas (1 día)
                     .compact();
 
             System.out.println("JWT generado correctamente");

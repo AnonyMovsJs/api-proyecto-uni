@@ -145,4 +145,81 @@ public class CreditoServiceImpl implements CreditoService{
             cuotaRepository.save(cuota);
         }
     }
+
+    @Override
+    @Transactional
+    public void agregarProductosACuenta(Venta ventaExistente, BigDecimal montoAdicional, String nuevaFechaVencimiento) {
+        Credito credito = creditoRepository.findByVentaId(ventaExistente.getId())
+            .orElseThrow(() -> new RuntimeException("Crédito no encontrado para la venta ID: " + ventaExistente.getId()));
+
+        // Actualizar monto total del crédito
+        BigDecimal nuevoTotalCredito = credito.getMontoTotal().add(montoAdicional);
+        credito.setMontoTotal(nuevoTotalCredito);
+
+        // Si se especificó una nueva fecha de vencimiento, actualizar fecha fin
+        LocalDate fechaVencParsed = null;
+        if (nuevaFechaVencimiento != null && !nuevaFechaVencimiento.isBlank()) {
+            try {
+                fechaVencParsed = LocalDate.parse(nuevaFechaVencimiento.trim());
+                credito.setFechaFin(fechaVencParsed);
+            } catch (Exception e) {
+                // Si el parseo falla, mantener la fecha actual
+            }
+        }
+
+        creditoRepository.save(credito);
+
+        // Actualizar las cuotas pendientes: sumar el monto adicional a la última cuota activa o pendiente
+        List<Cuota> cuotas = cuotaRepository.findByCreditoId(credito.getId());
+        Cuota cuotaAjustar = cuotas.stream()
+            .filter(c -> c.getEstado() != Cuota.EstadoCuota.PAGADO)
+            .reduce((first, second) -> second) // tomar la última no pagada
+            .orElse(null);
+
+        if (cuotaAjustar != null) {
+            cuotaAjustar.setMonto(cuotaAjustar.getMonto().add(montoAdicional));
+            if (fechaVencParsed != null) {
+                cuotaAjustar.setFechaVencimiento(fechaVencParsed);
+            }
+            // Si estaba vencida pero se extendió la fecha a futuro, resetear a PENDIENTE
+            if (cuotaAjustar.getEstado() == Cuota.EstadoCuota.VENCIDO && cuotaAjustar.getFechaVencimiento().isAfter(LocalDate.now())) {
+                cuotaAjustar.setEstado(Cuota.EstadoCuota.PENDIENTE);
+            }
+            cuotaRepository.save(cuotaAjustar);
+        } else {
+            // Si por alguna razón todas estaban pagadas, crear una nueva cuota con el saldo agregado
+            Cuota nuevaCuota = new Cuota();
+            nuevaCuota.setCredito(credito);
+            nuevaCuota.setNumeroCuota(cuotas.size() + 1);
+            nuevaCuota.setMonto(montoAdicional);
+            nuevaCuota.setFechaVencimiento(fechaVencParsed != null ? fechaVencParsed : credito.getFechaFin());
+            nuevaCuota.setEstado(Cuota.EstadoCuota.PENDIENTE);
+            cuotaRepository.save(nuevaCuota);
+        }
+    }
+
+    @Override
+    @Transactional
+    public Cuota actualizarFechaVencimientoCuota(Long cuotaId, LocalDate nuevaFecha) {
+        if (nuevaFecha == null) {
+            throw new IllegalArgumentException("La nueva fecha de vencimiento no puede ser nula");
+        }
+        Cuota cuota = cuotaRepository.findById(cuotaId)
+            .orElseThrow(() -> new RuntimeException("Cuota no encontrada con ID: " + cuotaId));
+
+        cuota.setFechaVencimiento(nuevaFecha);
+        if (cuota.getEstado() == Cuota.EstadoCuota.VENCIDO && nuevaFecha.isAfter(LocalDate.now())) {
+            cuota.setEstado(Cuota.EstadoCuota.PENDIENTE);
+        }
+        Cuota guardada = cuotaRepository.save(cuota);
+
+        // Actualizar también la fecha fin del crédito si esta cuota supera la actual fecha fin
+        Credito credito = cuota.getCredito();
+        if (credito != null && (credito.getFechaFin() == null || nuevaFecha.isAfter(credito.getFechaFin()))) {
+            credito.setFechaFin(nuevaFecha);
+            creditoRepository.save(credito);
+        }
+
+        return guardada;
+    }
 }

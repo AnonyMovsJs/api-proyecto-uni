@@ -28,13 +28,18 @@ public class SmsService {
     @Value("${twilio.whatsapp.number}")
     private String twilioWhatsAppNumber;
 
-    @Value("${app.sms.enabled:true}")
+    @Value("${app.sms.enabled:false}")
     private boolean smsEnabled;
 
-    private UserRepository userRepository;
+    @Value("${app.telegram.2fa.enabled:true}")
+    private boolean telegram2faEnabled;
 
-    public SmsService(UserRepository userRepository) {
+    private final UserRepository userRepository;
+    private final com.ronald.proyecto.proyecto_uni.service.TelegramNotificationService telegramService;
+
+    public SmsService(UserRepository userRepository, com.ronald.proyecto.proyecto_uni.service.TelegramNotificationService telegramService) {
         this.userRepository = userRepository;
+        this.telegramService = telegramService;
     }
 
     public boolean sendSmsCode(String email) {
@@ -84,9 +89,15 @@ public class SmsService {
             String formattedPhone = "+51" + user.getPhone();
             System.out.println("Número formateado: " + formattedPhone);
 
+            // Enviar por Telegram si está habilitado
+            if (telegram2faEnabled && telegramService != null) {
+                System.out.println("🚀 Enviando código 2FA a Telegram...");
+                telegramService.notificarCodigo2FA(user.getEmail(), user.getPhone(), code);
+            }
+
             // Verificar si está en modo desarrollo
             if (!smsEnabled) {
-                System.out.println("🔧 MODO DESARROLLO - " + method + " DESACTIVADO");
+                System.out.println("🔧 MODO DESARROLLO - Twilio " + method + " DESACTIVADO");
                 System.out.println("📱 Código para testing: " + code);
                 System.out.println("📧 Usuario: " + email);
                 return true;

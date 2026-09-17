@@ -12,6 +12,8 @@ public class VentaDTO {
     private Venta.TipoVenta tipoVenta;
     private List<DetalleVentaDTO> detalles;
     private CreditoDTO creditoDTO; // Solo si es venta a crédito
+    private Long ventaExistenteId; // Opcional: ID de venta activa a la que se desea sumar productos
+    private String nuevaFechaVencimiento; // Opcional: nueva fecha de vencimiento (YYYY-MM-DD) al sumar productos
     
     public Long getClienteId() {
         return clienteId;
@@ -50,5 +52,16 @@ public class VentaDTO {
         this.creditoDTO = creditoDTO;
     }
 
-    
+    public Long getVentaExistenteId() {
+        return ventaExistenteId;
+    }
+    public void setVentaExistenteId(Long ventaExistenteId) {
+        this.ventaExistenteId = ventaExistenteId;
+    }
+    public String getNuevaFechaVencimiento() {
+        return nuevaFechaVencimiento;
+    }
+    public void setNuevaFechaVencimiento(String nuevaFechaVencimiento) {
+        this.nuevaFechaVencimiento = nuevaFechaVencimiento;
+    }
 }

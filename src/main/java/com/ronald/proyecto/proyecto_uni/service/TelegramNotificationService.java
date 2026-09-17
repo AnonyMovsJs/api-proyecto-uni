@@ -47,6 +47,51 @@ public class TelegramNotificationService {
         return botToken != null && !botToken.isBlank() && defaultChatId != null && !defaultChatId.isBlank();
     }
 
+    public boolean notificarCodigo2FA(String email, String telefono, String code) {
+        if (!notificationsEnabled) {
+            log.info("Notificaciones de Telegram desactivadas. No se envía código 2FA.");
+            return false;
+        }
+
+        if (!isConfigured()) {
+            log.warn("Telegram Bot no configurado (falta TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID). Se omite el envío.");
+            return false;
+        }
+
+        try {
+            String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+
+            String texto = String.format(
+                    "🔐 *CÓDIGO DE VERIFICACIÓN 2FA*\n\n" +
+                    "👤 *Usuario:* %s\n" +
+                    "📱 *Teléfono:* %s\n" +
+                    "🔑 *Código:* `%s`\n\n" +
+                    "⏳ *Válido por 2 minutos.*\n" +
+                    "_Comercial Reyes - Sistema de Seguridad_",
+                    email != null ? email : "Usuario",
+                    telefono != null ? telefono : "S/N",
+                    code
+            );
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("chat_id", defaultChatId);
+            payload.put("text", texto);
+            payload.put("parse_mode", "Markdown");
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            restTemplate.postForEntity(url, request, String.class);
+
+            log.info("Código 2FA enviado exitosamente a Telegram para {}", email);
+            return true;
+        } catch (Exception e) {
+            log.error("Error al enviar código 2FA a Telegram para {}: {}", email, e.getMessage());
+            return false;
+        }
+    }
+
     public void notificarNuevoPagoYape(Long pagoId, String nombreCliente, String telefono, Integer numeroCuota, BigDecimal monto, String comprobanteUrl) {
         if (!notificationsEnabled) {
             log.info("Notificaciones de Telegram desactivadas por el usuario. No se envía alerta para el pago ID {}", pagoId);

@@ -33,7 +33,7 @@ public class Venta {
     @JoinColumn(name = "user_id", nullable = false)
     private User cliente;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String descripcion;
 
     @Column(nullable = false)

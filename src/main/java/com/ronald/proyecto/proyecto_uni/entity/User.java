@@ -44,8 +44,7 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
     private String dni;
 
     @Column(name = "phone")
-    @NotBlank()
-    @Pattern(regexp = "^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos")
+    @Pattern(regexp = "^$|^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos numéricos")
     private String phone;
 
     /* PASO 3 TWILIO */
@@ -62,7 +61,6 @@ public class User implements UserIsAdmin { // El userIsAdmin para los roles para
     private String tempToken;
 
     @Column(name = "address")
-    @NotBlank()
     private String address;
 
     @Column(name = "email", unique = true/* , nullable = false */)

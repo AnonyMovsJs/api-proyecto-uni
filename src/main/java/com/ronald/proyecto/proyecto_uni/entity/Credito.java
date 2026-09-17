@@ -133,6 +133,12 @@ public class Credito {
 
     @jakarta.persistence.Transient
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public Long getVentaId() {
+        return (venta != null) ? venta.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     public String getTipoVenta() {
         return (venta != null && venta.getTipoVenta() != null) ? venta.getTipoVenta().name() : null;
     }

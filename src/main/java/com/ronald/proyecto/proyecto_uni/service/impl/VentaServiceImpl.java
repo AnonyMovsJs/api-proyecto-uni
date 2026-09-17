@@ -43,10 +43,45 @@ public class VentaServiceImpl implements VentaService{
             .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
         
         
-        // Crear venta
+        // Caso 1: Se seleccionó una cuenta/venta existente para acumular los productos
+        if (ventaDTO.getVentaExistenteId() != null) {
+            Venta ventaExistente = ventaRepository.findById(ventaDTO.getVentaExistenteId())
+                .orElseThrow(() -> new RuntimeException("La venta existente con ID " + ventaDTO.getVentaExistenteId() + " no existe"));
+
+            // Sumar monto adicional al montoTotal de la venta existente
+            BigDecimal montoAdicional = ventaDTO.getMontoTotal();
+            ventaExistente.setMontoTotal(ventaExistente.getMontoTotal().add(montoAdicional));
+            
+            // Actualizar descripción si se envió una nueva
+            String descNueva = ventaDTO.getDescripcion();
+            if (descNueva != null && !descNueva.isBlank()) {
+                ventaExistente.setDescripcion(ventaExistente.getDescripcion() + " + " + descNueva.trim());
+            }
+
+            Venta ventaActualizada = ventaRepository.save(ventaExistente);
+
+            // Guardar los nuevos detalles vinculados a la venta existente
+            for (DetalleVentaDTO detalleDTO : ventaDTO.getDetalles()) {
+                DetalleVenta detalle = new DetalleVenta();
+                detalle.setVenta(ventaActualizada);
+                detalle.setNombreProducto(detalleDTO.getNombreProducto());
+                detalle.setCantidad(detalleDTO.getCantidad());
+                detalle.setPrecioUnitario(detalleDTO.getPrecioUnitario());
+                detalle.setSubtotal(detalleDTO.getPrecioUnitario().multiply(new BigDecimal(detalleDTO.getCantidad())));
+                detalleVentaRepository.save(detalle);
+            }
+
+            // Actualizar el crédito y cuota asociada a esa cuenta
+            creditoService.agregarProductosACuenta(ventaActualizada, montoAdicional, ventaDTO.getNuevaFechaVencimiento());
+
+            return ventaActualizada;
+        }
+
+        // Caso 2: Crear venta y cuenta nueva
         Venta venta = new Venta();
         venta.setCliente(cliente);
-        venta.setDescripcion(ventaDTO.getDescripcion());
+        String desc = ventaDTO.getDescripcion();
+        venta.setDescripcion((desc != null && !desc.isBlank()) ? desc.trim() : "Venta de productos");
         venta.setMontoTotal(ventaDTO.getMontoTotal());
         venta.setTipoVenta(ventaDTO.getTipoVenta());
         venta.setFechaVenta(LocalDate.now());

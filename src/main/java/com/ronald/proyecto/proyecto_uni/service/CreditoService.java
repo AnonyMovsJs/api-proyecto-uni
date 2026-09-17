@@ -18,4 +18,8 @@ public interface CreditoService {
     List<Cuota> obtenerCuotasPorCredito(Long creditoId);
 
     void verificarCuotasVencidas();
+
+    void agregarProductosACuenta(Venta ventaExistente, java.math.BigDecimal montoAdicional, String nuevaFechaVencimiento);
+
+    Cuota actualizarFechaVencimientoCuota(Long cuotaId, java.time.LocalDate nuevaFecha);
 }

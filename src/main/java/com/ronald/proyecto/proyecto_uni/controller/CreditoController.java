@@ -42,4 +42,21 @@ public class CreditoController {
         List<Cuota> cuotas = creditoService.obtenerCuotasPorCredito(creditoId);
         return ResponseEntity.ok(cuotas);
     }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/cuota/{cuotaId}/fecha-vencimiento")
+    public ResponseEntity<?> actualizarFechaVencimiento(
+            @PathVariable Long cuotaId,
+            @org.springframework.web.bind.annotation.RequestBody java.util.Map<String, String> body) {
+        try {
+            String fechaStr = body.get("fechaVencimiento");
+            if (fechaStr == null || fechaStr.isBlank()) {
+                return ResponseEntity.badRequest().body(java.util.Map.of("error", "Debe proporcionar una fecha de vencimiento válida"));
+            }
+            java.time.LocalDate nuevaFecha = java.time.LocalDate.parse(fechaStr.trim());
+            Cuota cuota = creditoService.actualizarFechaVencimientoCuota(cuotaId, nuevaFecha);
+            return ResponseEntity.ok(cuota);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        }
+    }
 }

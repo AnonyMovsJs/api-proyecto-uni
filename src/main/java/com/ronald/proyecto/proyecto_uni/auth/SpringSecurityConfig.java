@@ -58,11 +58,13 @@ public class SpringSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/ventas").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/ventas/cliente/{clienteId}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/ventas/{ventaId}").hasAnyRole("USER","ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/ventas//{ventaId}/detalles").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/ventas/{ventaId}/detalles").hasAnyRole("USER", "ADMIN")
                         //CRÉDITOS----------------------------------------------------------
                         .requestMatchers(HttpMethod.GET, "/api/creditos/cliente/{clienteId}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/creditos/venta/{ventaId}").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/creditos/{creditoId}/cuotas").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/creditos/cuota/**").hasRole("ADMIN")
+                        .requestMatchers("/api/cuotas/**").hasAnyRole("USER", "ADMIN")
                         //PAGOS-------------------------------------------------------------
                         .requestMatchers(HttpMethod.POST, "/api/pagos", "/api/pagos/yape").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/pagos/{pagoId}/validar").hasRole("ADMIN")

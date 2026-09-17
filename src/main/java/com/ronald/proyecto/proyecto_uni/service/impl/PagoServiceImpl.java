@@ -57,32 +57,43 @@ public class PagoServiceImpl implements PagoService {
     @Override
     @Transactional
     public Pago registrarPago(PagoDTO pagoDTO) {
+        if (pagoDTO.getMonto() == null || pagoDTO.getMonto().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("El monto a pagar debe ser mayor a 0 y no puede ser negativo");
+        }
+
         Cuota cuota = cuotaRepository.findById(pagoDTO.getCuotaId())
                 .orElseThrow(() -> new RuntimeException("Cuota no encontrada"));
 
         if (cuota.getEstado() == Cuota.EstadoCuota.PAGADO) {
-            throw new RuntimeException("La cuota ya está pagada");
+            throw new RuntimeException("La cuota ya está completamente pagada");
         }
 
-        if (pagoDTO.getMonto().compareTo(cuota.getMonto()) != 0) {
-            throw new RuntimeException("El monto del pago debe ser igual al monto de la cuota");
+        if (pagoDTO.getMonto().compareTo(cuota.getMonto()) > 0) {
+            throw new IllegalArgumentException("El monto ingresado (S/. " + pagoDTO.getMonto() + ") no puede superar la deuda total pendiente de esta cuota (S/. " + cuota.getMonto() + ")");
         }
 
         Pago pago = new Pago();
         pago.setCuota(cuota);
         pago.setMonto(pagoDTO.getMonto());
         pago.setFechaPago(LocalDate.now());
-        pago.setMetodoPago(pagoDTO.getMetodoPago() != null ? pagoDTO.getMetodoPago() : "EFECTIVO");
+        pago.setMetodoPago(pagoDTO.getMetodoPago() != null ? pagoDTO.getMetodoPago().toUpperCase() : "EFECTIVO");
         pago.setEstado("APROBADO");
         pago.setFechaValidacion(LocalDate.now());
 
         Pago pagoGuardado = pagoRepository.save(pago);
 
-        // Actualizar cuota a PAGADO
-        cuota.setEstado(Cuota.EstadoCuota.PAGADO);
-        cuotaRepository.save(cuota);
-
-        verificarCreditoCompletado(cuota);
+        // Si el pago cubre el monto exacto de la cuota
+        if (pagoDTO.getMonto().compareTo(cuota.getMonto()) == 0) {
+            cuota.setEstado(Cuota.EstadoCuota.PAGADO);
+            cuotaRepository.save(cuota);
+            verificarCreditoCompletado(cuota);
+        } else {
+            // Abono parcial a la cuota: descontar saldo restante
+            BigDecimal nuevoMonto = cuota.getMonto().subtract(pagoDTO.getMonto());
+            cuota.setMonto(nuevoMonto);
+            cuota.setEstado(Cuota.EstadoCuota.PENDIENTE);
+            cuotaRepository.save(cuota);
+        }
 
         return pagoGuardado;
     }
@@ -90,6 +101,12 @@ public class PagoServiceImpl implements PagoService {
     @Override
     @Transactional
     public Pago registrarPagoConComprobante(Long cuotaId, MultipartFile comprobante) {
+        return registrarPagoConComprobante(cuotaId, comprobante, "YAPE");
+    }
+
+    @Override
+    @Transactional
+    public Pago registrarPagoConComprobante(Long cuotaId, MultipartFile comprobante, String metodoPago) {
         Cuota cuota = cuotaRepository.findById(cuotaId)
                 .orElseThrow(() -> new RuntimeException("Cuota con ID " + cuotaId + " no encontrada"));
 
@@ -121,7 +138,7 @@ public class PagoServiceImpl implements PagoService {
         pago.setCuota(cuota);
         pago.setMonto(cuota.getMonto());
         pago.setFechaPago(LocalDate.now());
-        pago.setMetodoPago("YAPE");
+        pago.setMetodoPago(metodoPago != null ? metodoPago.toUpperCase() : "YAPE");
         pago.setEstado("PENDIENTE");
         pago.setComprobanteUrl(secureUrl);
         pago.setPublicIdCloudinary(publicId);
@@ -312,9 +329,12 @@ public class PagoServiceImpl implements PagoService {
             cuotasPendientes = cuotaRepository.findCuotasActivasByClienteIdFIFO(clienteId);
         }
 
-        if (cuotasPendientes.isEmpty()) {
-            String cuentaNombre = "FIADO".equalsIgnoreCase(tipo) ? "de fiados en bodega" : "de créditos";
-            throw new RuntimeException("El cliente no tiene deudas pendientes activas " + cuentaNombre + " para amortizar");
+        BigDecimal deudaTotalPendiente = cuotasPendientes.stream()
+            .map(Cuota::getMonto)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (monto.compareTo(deudaTotalPendiente) > 0) {
+            throw new IllegalArgumentException("El monto a abonar (S/. " + monto + ") supera la deuda total pendiente acumulada (S/. " + deudaTotalPendiente + ")");
         }
 
         String secureUrl = null;

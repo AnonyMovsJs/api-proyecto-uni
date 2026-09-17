@@ -1,6 +1,8 @@
 package com.ronald.proyecto.proyecto_uni.service.impl;
 
 import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -18,12 +20,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ronald.proyecto.proyecto_uni.OpenAIProperties;
 import com.ronald.proyecto.proyecto_uni.entity.Credito;
 import com.ronald.proyecto.proyecto_uni.entity.Cuota;
+import com.ronald.proyecto.proyecto_uni.entity.Pago;
 import com.ronald.proyecto.proyecto_uni.entity.User;
 import com.ronald.proyecto.proyecto_uni.models.ChatRequest;
 import com.ronald.proyecto.proyecto_uni.models.ChatResponse;
 import com.ronald.proyecto.proyecto_uni.models.ConversationState;
 import com.ronald.proyecto.proyecto_uni.models.UserRequest;
 import com.ronald.proyecto.proyecto_uni.repository.CuotaRepository;
+import com.ronald.proyecto.proyecto_uni.repository.PagoRepository;
 import com.ronald.proyecto.proyecto_uni.repository.UserRepository;
 import com.ronald.proyecto.proyecto_uni.service.ChatbotService;
 import com.ronald.proyecto.proyecto_uni.service.UserService;
@@ -37,6 +41,7 @@ public class ChatbotServiceImpl implements ChatbotService {
     private final CuotaRepository cuotaRepository;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final PagoRepository pagoRepository;
     private final OpenAiService openAiService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -50,10 +55,12 @@ public class ChatbotServiceImpl implements ChatbotService {
             CuotaRepository cuotaRepository,
             UserRepository userRepository,
             UserService userService,
+            PagoRepository pagoRepository,
             @Autowired(required = false) OpenAIProperties openAIProperties) {
         this.cuotaRepository = cuotaRepository;
         this.userRepository = userRepository;
         this.userService = userService;
+        this.pagoRepository = pagoRepository;
 
         OpenAiService service = null;
         try {
@@ -89,13 +96,21 @@ public class ChatbotServiceImpl implements ChatbotService {
                 return response;
             }
 
-            // 2. Wizard de registro en progreso
+            // 2. Ruptura Inteligente de Wizard si el usuario cambia explícitamente de intención
             if ("CREATING_USER".equals(state.getCurrentState())) {
                 if (!isAdmin) {
                     state.clearContext();
                     return buildSecurityDeniedResponse();
                 }
-                return processClientRegistrationWizard(rawMessage, message, state);
+                // Solo liberamos el wizard si el usuario solicita explícitamente una acción o consulta ajena al formulario
+                if (esIntencionNavegacion(message) || esConsultaDeudores(message) ||
+                    esConsultaProximoAPagar(message) || esConsultaProyeccionFutura(message) ||
+                    message.startsWith("cuanto debe") || message.startsWith("pagos de") ||
+                    message.startsWith("llevame") || message.startsWith("ir a")) {
+                    state.clearContext();
+                } else {
+                    return processClientRegistrationWizard(rawMessage, message, state);
+                }
             }
 
             // 3. Control de Acceso Estricto (RBAC Guard)
@@ -110,18 +125,28 @@ public class ChatbotServiceImpl implements ChatbotService {
                 return buildWelcomeResponse(isAdmin);
             }
 
-            // 5. Iniciar Wizard de Registro de Cliente (ADMIN)
+            // 5. NAVEGACIÓN AGÉNTICA (Interacción directa con la aplicación o acciones de cobranza)
+            if (esIntencionNavegacion(message) || (isAdmin && esIntencionNotificarCliente(message))) {
+                return procesarNavegacion(rawMessage, message, isAdmin, userId);
+            }
+
+            // 6. PROYECCIÓN FINANCIERA FUTURA ("¿Cuánto me deberá X dentro de N meses?")
+            if (esConsultaProyeccionFutura(message)) {
+                return procesarProyeccionFutura(rawMessage, message, isAdmin);
+            }
+
+            // 7. Iniciar Wizard de Registro de Cliente (ADMIN)
             if (isAdmin && esIntencionRegistrarCliente(message)) {
                 state.setCurrentState("CREATING_USER");
                 return processClientRegistrationWizard(rawMessage, message, state);
             }
 
-            // 6. Consulta específica: ¿Quién es el próximo a pagar / vencer?
+            // 8. Consulta específica: ¿Quién es el próximo a pagar / vencer?
             if (isAdmin && esConsultaProximoAPagar(message)) {
                 return consultarProximoAPagar();
             }
 
-            // 6b. Consultas de Deudores / Quien no paga (ADMIN)
+            // 8b. Consultas de Deudores / Quien no paga (ADMIN)
             if (isAdmin && esConsultaDeudores(message)) {
                 return consultarDeudoresGlobales();
             }
@@ -130,6 +155,9 @@ public class ChatbotServiceImpl implements ChatbotService {
             if (isAdmin) {
                 User cliente = detectarClienteEnMensaje(rawMessage, message);
                 if (cliente != null) {
+                    if (esConsultaPagos(message)) {
+                        return consultarPagosCliente(cliente);
+                    }
                     return consultarEstadoCliente(cliente);
                 }
             }
@@ -179,7 +207,7 @@ public class ChatbotServiceImpl implements ChatbotService {
                 if (ctx.containsKey("dni")) {
                     // Validar si el DNI ya existe
                     String dniVal = (String) ctx.get("dni");
-                    Optional<User> existing = userRepository.findByDni(dniVal);
+                    Optional<User> existing = userRepository.findFirstByDni(dniVal);
                     if (existing.isPresent()) {
                         state.clearContext();
                         ChatResponse response = new ChatResponse();
@@ -256,7 +284,7 @@ public class ChatbotServiceImpl implements ChatbotService {
             Matcher matcher = dniPattern.matcher(input);
             if (matcher.find()) {
                 String inputDni = matcher.group(1);
-                Optional<User> existingUser = userRepository.findByDni(inputDni);
+                Optional<User> existingUser = userRepository.findFirstByDni(inputDni);
                 if (existingUser.isPresent()) {
                     User u = existingUser.get();
                     state.clearContext();
@@ -271,44 +299,53 @@ public class ChatbotServiceImpl implements ChatbotService {
                 state.setStep(3); // Siguiente: Celular
                 ChatResponse response = new ChatResponse();
                 response.setSuccess(true);
-                response.setMessage("Perfecto. Ahora por favor indicame su **telefono celular** (9 digitos):");
+                response.setMessage("Perfecto. Ahora por favor indícame su **teléfono celular** (9 dígitos, o escribe *'omitir'* si no tiene):");
                 return response;
             } else {
                 ChatResponse response = new ChatResponse();
                 response.setSuccess(true);
-                response.setMessage("El DNI debe contener exactamente 8 digitos numericos. Por favor ingresalo nuevamente:");
+                response.setMessage("El DNI debe contener exactamente 8 dígitos numéricos. Por favor ingrésalo nuevamente:");
                 return response;
             }
         }
 
-        // Paso 3: Procesar Teléfono Celular
+        // Paso 3: Procesar Teléfono Celular (Opcional)
         if (step == 3) {
+            String norm = input.toLowerCase();
+            boolean esOmision = norm.equals("omitir") || norm.equals("no") || norm.equals("no tiene") ||
+                    norm.equals("ninguno") || norm.equals("-") || norm.equals("siguiente") || norm.equals("omite");
+
             Pattern phonePattern = Pattern.compile("\\b(9[0-9]{8}|[0-9]{9})\\b");
             Matcher matcher = phonePattern.matcher(input);
+
             if (matcher.find()) {
                 ctx.put("phone", matcher.group(1));
-                state.setStep(4); // Siguiente: Dirección
-                ChatResponse response = new ChatResponse();
-                response.setSuccess(true);
-                response.setMessage("Ya casi terminamos. ¿Cual es la **direccion o domicilio** del cliente?");
-                return response;
+            } else if (esOmision) {
+                ctx.put("phone", "");
             } else {
                 ChatResponse response = new ChatResponse();
                 response.setSuccess(true);
-                response.setMessage("El telefono celular debe tener 9 digitos (generalmente inicia con 9). Por favor indicalo:");
+                response.setMessage("El teléfono debe tener 9 dígitos numéricos, o escribe *'omitir'* si el cliente no cuenta con celular:");
                 return response;
             }
+
+            state.setStep(4); // Siguiente: Dirección
+            ChatResponse response = new ChatResponse();
+            response.setSuccess(true);
+            response.setMessage("Ya casi terminamos. ¿Cuál es la **dirección o domicilio** del cliente? (O escribe *'omitir'*):");
+            return response;
         }
 
-        // Paso 4: Procesar Dirección
+        // Paso 4: Procesar Dirección (Opcional)
         if (step == 4) {
-            if (input.length() >= 4) {
-                ctx.put("address", input);
+            String norm = input.toLowerCase();
+            boolean esOmision = norm.equals("omitir") || norm.equals("no") || norm.equals("no tiene") ||
+                    norm.equals("ninguno") || norm.equals("-") || norm.equals("siguiente") || norm.equals("omite");
+
+            if (esOmision) {
+                ctx.put("address", "");
             } else {
-                ChatResponse response = new ChatResponse();
-                response.setSuccess(true);
-                response.setMessage("Por favor indica una direccion o referencia valida:");
-                return response;
+                ctx.put("address", input);
             }
         }
 
@@ -656,6 +693,68 @@ public class ChatbotServiceImpl implements ChatbotService {
     }
 
     // ==========================================
+    //  CONSULTA DE PAGOS REALIZADOS POR CLIENTE (ADMIN)
+    // ==========================================
+    private ChatResponse consultarPagosCliente(User cliente) {
+        Long clienteId = Long.valueOf(cliente.getId());
+        List<Pago> pagos = pagoRepository.findByCuotaCreditoVentaClienteIdOrderByFechaPagoDesc(clienteId);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Historial de Pagos: **").append(cliente.getName()).append(" ").append(cliente.getLastname()).append("**\n");
+        sb.append("• **DNI:** ").append(cliente.getDni()).append(" | **Teléfono:** ").append(cliente.getPhone() != null ? cliente.getPhone() : "No registrado").append("\n\n");
+
+        List<Map<String, Object>> filasPagos = new ArrayList<>();
+
+        if (pagos == null || pagos.isEmpty()) {
+            sb.append("El cliente no registra abonos o pagos procesados en el sistema actualmente.\n");
+        } else {
+            BigDecimal totalAbonado = pagos.stream()
+                    .filter(p -> p.getMonto() != null)
+                    .map(Pago::getMonto)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            sb.append("• **Total Pagado Registrado:** S/. ").append(totalAbonado.setScale(2)).append("\n");
+            sb.append("• **Cantidad de Transacciones:** ").append(pagos.size()).append(" pago(s)\n\n");
+            sb.append("Últimos pagos registrados:\n");
+
+            int count = 0;
+            for (Pago p : pagos) {
+                if (count < 5) {
+                    sb.append("• 💳 **S/. ").append(p.getMonto().setScale(2)).append("**")
+                      .append(" - ").append(p.getFechaPago() != null ? p.getFechaPago().format(DATE_FORMATTER) : "S/F")
+                      .append(" (").append(p.getMetodoPago() != null ? p.getMetodoPago() : "Efectivo")
+                      .append(" - ").append(p.getEstado() != null ? p.getEstado() : "APROBADO").append(")\n");
+                    count++;
+                }
+
+                Map<String, Object> fila = new LinkedHashMap<>();
+                fila.put("id", p.getId());
+                fila.put("monto", "S/. " + (p.getMonto() != null ? p.getMonto().setScale(2) : "0.00"));
+                fila.put("fecha", p.getFechaPago() != null ? p.getFechaPago().format(DATE_FORMATTER) : "-");
+                fila.put("metodo", p.getMetodoPago() != null ? p.getMetodoPago() : "EFECTIVO");
+                fila.put("estado", p.getEstado() != null ? p.getEstado() : "APROBADO");
+                fila.put("tipo", p.getTipoAbono() != null ? p.getTipoAbono() : "-");
+                filasPagos.add(fila);
+            }
+        }
+
+        ChatResponse response = new ChatResponse();
+        response.setSuccess(true);
+        response.setMessage(sb.toString());
+        response.setRequiresAction(true);
+        response.setActionType("NAVIGATE");
+
+        Map<String, Object> navData = new HashMap<>();
+        navData.put("route", "/admin/user/" + cliente.getId() + "?tab=pagos");
+        navData.put("target", "Pagos de " + cliente.getName() + " " + cliente.getLastname());
+        navData.put("autoRedirect", true);
+        navData.put("pagosData", filasPagos);
+        response.setActionData(navData);
+
+        return response;
+    }
+
+    // ==========================================
     //  CONSULTA DE DATOS PROPIOS (USER REGULAR)
     // ==========================================
     private ChatResponse consultarDatosPropiosCliente(String userIdentifier) {
@@ -800,10 +899,39 @@ public class ChatbotServiceImpl implements ChatbotService {
                         systemPrompt.append("No hay registros de deudas activas actualmente en el sistema.\n");
                     }
 
+                    // Inyectar contexto de pagos recientes al RAG
+                    try {
+                        List<Pago> ultimosPagos = pagoRepository.findAllByOrderByFechaPagoDesc();
+                        if (ultimosPagos != null && !ultimosPagos.isEmpty()) {
+                            systemPrompt.append("\nHISTORIAL RECIENTE DE PAGOS Y ABONOS REGISTRADOS:\n");
+                            int limitePagos = Math.min(ultimosPagos.size(), 20);
+                            for (int i = 0; i < limitePagos; i++) {
+                                Pago p = ultimosPagos.get(i);
+                                String pagador = "Desconocido";
+                                if (p.getCuota() != null && p.getCuota().getCredito() != null
+                                        && p.getCuota().getCredito().getVenta() != null
+                                        && p.getCuota().getCredito().getVenta().getCliente() != null) {
+                                    User cl = p.getCuota().getCredito().getVenta().getCliente();
+                                    pagador = cl.getName() + " " + cl.getLastname() + " (DNI: " + cl.getDni() + ")";
+                                }
+                                systemPrompt.append("- Pago ID ").append(p.getId())
+                                        .append(" | Cliente: ").append(pagador)
+                                        .append(" | Monto: S/. ").append(p.getMonto() != null ? p.getMonto().setScale(2) : "0.00")
+                                        .append(" | Fecha: ").append(p.getFechaPago() != null ? p.getFechaPago().format(DATE_FORMATTER) : "S/F")
+                                        .append(" | Método: ").append(p.getMetodoPago() != null ? p.getMetodoPago() : "EFECTIVO")
+                                        .append(" | Estado: ").append(p.getEstado() != null ? p.getEstado() : "APROBADO")
+                                        .append("\n");
+                            }
+                        }
+                    } catch (Exception exP) {
+                        System.err.println("Advertencia al inyectar pagos en RAG: " + exP.getMessage());
+                    }
+
                     systemPrompt.append("\nINSTRUCCIONES DE RESPUESTA:\n")
                             .append("1. Si te preguntan quién debe más, quién tiene la deuda más grande, quién debe menos, etc., analiza la lista anterior y responde directamente con el nombre, DNI, monto y detalle relevante.\n")
-                            .append("2. Usa negritas (**) para resaltar nombres, montos y fechas clave.\n")
-                            .append("3. Responde siempre de forma ejecutiva, concisa y amable.");
+                            .append("2. Si te preguntan por los pagos o abonos de algún cliente o pagos recientes, revisa el historial de pagos anterior y responde con precisión detallando montos, fechas y métodos.\n")
+                            .append("3. Usa negritas (**) para resaltar nombres, montos y fechas clave.\n")
+                            .append("4. Responde siempre de forma ejecutiva, concisa y amable.");
                 } else {
                     systemPrompt.append("ROL ACTUAL: CLIENTE (Solo puede ver sus propias deudas y cuotas).\n");
                 }
@@ -885,7 +1013,8 @@ public class ChatbotServiceImpl implements ChatbotService {
 
     private boolean esIntencionRegistrarCliente(String msg) {
         return ((msg.contains("registra") || msg.contains("crear") || msg.contains("agrega") || msg.contains("alta")) &&
-                (msg.contains("cliente") || msg.contains("usuario"))) || msg.contains("registra a");
+                (msg.contains("cliente") || msg.contains("usuario") || msg.contains("persona") || msg.contains("alguien"))) ||
+                msg.contains("registra a") || msg.contains("registrar a");
     }
 
     private boolean esConsultaProximoAPagar(String msg) {
@@ -910,6 +1039,23 @@ public class ChatbotServiceImpl implements ChatbotService {
                msg.contains("mi proxima cuota") || msg.contains("cuanto debo") ||
                msg.contains("mis pagos") || msg.contains("he pagado") ||
                msg.contains("mi estado de cuenta");
+    }
+
+    private boolean esConsultaPagos(String msg) {
+        return msg.contains("pago") || msg.contains("pagos") ||
+               msg.contains("abono") || msg.contains("abonos") ||
+               msg.contains("ha pagado") || msg.contains("ha cancelado") ||
+               msg.contains("historial de pago") || msg.contains("comprobante");
+    }
+
+    private boolean esIntencionNotificarCliente(String msg) {
+        return msg.contains("notifica") || msg.contains("notificar") || msg.contains("notifiques") ||
+               msg.contains("notificacion") || msg.contains("notificaciones") ||
+               msg.contains("avisa") || msg.contains("avisar") || msg.contains("avisale") ||
+               msg.contains("cobrale") || msg.contains("recordale") ||
+               msg.contains("recuerdale") || msg.contains("recordar") ||
+               msg.contains("envia notificacion") || msg.contains("enviar notificacion") ||
+               msg.contains("envies") || msg.contains("enviale");
     }
 
     private boolean esIntencionAdminOAjena(String msg) {
@@ -951,85 +1097,519 @@ public class ChatbotServiceImpl implements ChatbotService {
         return response;
     }
 
+    private boolean esIntencionNavegacion(String msg) {
+        return msg.contains("llevame") || msg.contains("llevarme") ||
+               msg.contains("ir a") || msg.contains("ir al") ||
+               msg.contains("ir a la") || msg.contains("abrir") ||
+               msg.contains("abre") || msg.contains("navega") ||
+               msg.contains("navegar") || msg.contains("ver perfil") ||
+               msg.contains("muestrame") || msg.contains("muestra") ||
+               msg.contains("dirigeme") || msg.contains("entrar a");
+    }
+
+    private ChatResponse procesarNavegacion(String rawMsg, String normMsg, boolean isAdmin, String userId) {
+        ChatResponse response = new ChatResponse();
+        response.setSuccess(true);
+        response.setRequiresAction(true);
+        response.setActionType("NAVIGATE");
+
+        Map<String, Object> navData = new HashMap<>();
+
+        // 1. Navegación a Notificaciones de Cobranza Directa
+        if (isAdmin && esIntencionNotificarCliente(normMsg)) {
+            User deudorTarget = detectarClienteEnMensaje(rawMsg, normMsg);
+            String targetNombre = deudorTarget != null ? (deudorTarget.getName() + " " + deudorTarget.getLastname()) : extraerPosibleNombre(normMsg);
+            if (targetNombre == null) targetNombre = "";
+
+            String route = "/admin/cobranzas?cliente=" + URLEncoder.encode(targetNombre, StandardCharsets.UTF_8) + "&notificar=true";
+            navData.put("route", route);
+            navData.put("target", "Notificación a " + (targetNombre.isBlank() ? "Cliente" : targetNombre));
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Dirigiéndote al panel de Cobranzas para enviar la notificación inmediata a **" +
+                    (targetNombre.isBlank() ? "cliente seleccionado" : targetNombre) + "**...");
+            return response;
+        }
+
+        // 2. Navegación Contextual a un Cliente Específico (ADMIN)
+        if (isAdmin) {
+            User cliente = detectarClienteEnMensaje(rawMsg, normMsg);
+            if (cliente != null) {
+                if (esConsultaPagos(normMsg)) {
+                    return consultarPagosCliente(cliente);
+                }
+
+                String tab = "perfil";
+                String tabParam = "";
+                String detalleMsg = "al **perfil principal**";
+
+                if (normMsg.contains("pago") || normMsg.contains("abono") || normMsg.contains("liquidac")) {
+                    tab = "pagos";
+                    tabParam = "?tab=pagos";
+                    detalleMsg = "al historial de **Pagos y Abonos**";
+                } else if (normMsg.contains("compra") || normMsg.contains("compras") || normMsg.contains("pedido") || normMsg.contains("pedidos") || normMsg.contains("venta") || normMsg.contains("ventas")) {
+                    tab = "compras";
+                    tabParam = "?tab=compras";
+                    detalleMsg = "al historial de **Compras Realizadas**";
+                } else if (normMsg.contains("credito") || normMsg.contains("creditos") || normMsg.contains("cuota") || normMsg.contains("cuotas") || normMsg.contains("deuda") || normMsg.contains("deudas")) {
+                    tab = "creditos";
+                    tabParam = "?tab=creditos";
+                    detalleMsg = "al detalle de **Créditos y Cronograma de Cuotas**";
+                }
+
+                String route = "/admin/user/" + cliente.getId() + tabParam;
+                navData.put("route", route);
+                navData.put("target", cliente.getName() + " " + cliente.getLastname() + " (" + tab + ")");
+                navData.put("autoRedirect", true);
+                response.setActionData(navData);
+                response.setMessage("🚀 Te estoy llevando " + detalleMsg + " de **" +
+                        cliente.getName() + " " + cliente.getLastname() + "** (DNI: " + cliente.getDni() + ").");
+                return response;
+            }
+        }
+
+        // 4. Navegación a Mis Compras (Para cualquier usuario cuando dice 'mis compras' o 'mis pedidos')
+        if (normMsg.contains("mis compras") || normMsg.contains("mis pedidos") || normMsg.contains("mis cuotas") || normMsg.contains("mis deudas")) {
+            String route = isAdmin ? "/cliente/mis-compras" : "/cliente/mis-compras";
+            navData.put("route", route);
+            navData.put("target", "Mis Compras");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Abriendo tu catálogo de **Mis Compras y Estado de Cuenta**...");
+            return response;
+        }
+
+        // 5. Navegación a Nueva Venta / Registrar Venta
+        if (isAdmin && (normMsg.contains("nueva venta") || normMsg.contains("registrar venta") || normMsg.contains("crear venta") || normMsg.contains("vender"))) {
+            navData.put("route", "/admin/ventas/nueva");
+            navData.put("target", "Nueva Venta");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Abriendo el módulo de **Nueva Venta**...");
+            return response;
+        }
+
+        // 6. Navegación a Clientes Morosos / Scoring IA
+        if (isAdmin && (normMsg.contains("moroso") || normMsg.contains("morosos") || normMsg.contains("scoring") || normMsg.contains("evaluacion") || normMsg.contains("riesgo"))) {
+            navData.put("route", "/admin/evaluacion-ia");
+            navData.put("target", "Evaluación IA de Morosidad y Riesgo");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Te llevo al módulo de **Evaluación de Morosos y Riesgo Crediticio con IA**...");
+            return response;
+        }
+
+        // 7. Navegación a Control de Cobranzas
+        if (isAdmin && (normMsg.contains("cobranza") || normMsg.contains("cobranzas") || normMsg.contains("cobro") || normMsg.contains("deudores"))) {
+            navData.put("route", "/admin/cobranzas");
+            navData.put("target", "Control de Cobranzas");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Dirigiéndote al panel de **Control de Cobranzas y Alertas de Mora**...");
+            return response;
+        }
+
+        // 8. Navegación a Ventas Generales
+        if (isAdmin && (normMsg.contains("venta") || normMsg.contains("ventas") || normMsg.contains("compras"))) {
+            navData.put("route", "/admin/ventas");
+            navData.put("target", "Gestión de Ventas");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Te llevo al registro general de **Ventas**...");
+            return response;
+        }
+
+        // 9. Navegación a Pagos y Liquidaciones
+        if (isAdmin && (normMsg.contains("pago") || normMsg.contains("pagos") || normMsg.contains("abonos") || normMsg.contains("liquidaciones"))) {
+            navData.put("route", "/admin/pagos");
+            navData.put("target", "Gestión de Pagos");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Abriendo el módulo administrativo de **Pagos y Liquidaciones**...");
+            return response;
+        }
+
+        // 10. Navegación a Directorio de Usuarios / Clientes
+        if (isAdmin && (normMsg.contains("usuarios") || normMsg.contains("clientes") || normMsg.contains("personas"))) {
+            navData.put("route", "/users");
+            navData.put("target", "Directorio de Clientes");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Abriendo el **Directorio de Clientes y Usuarios**...");
+            return response;
+        }
+
+        // 11. Navegación a Dashboard
+        if (normMsg.contains("dashboard") || normMsg.contains("inicio") || normMsg.contains("panel principal")) {
+            String route = isAdmin ? "/admin/dashboard" : "/cliente/dashboard";
+            navData.put("route", route);
+            navData.put("target", "Dashboard");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Regresando al **Dashboard Principal**...");
+            return response;
+        }
+
+        // 12. Navegación a Mi Perfil (User o Admin)
+        if (normMsg.contains("mi perfil") || normMsg.contains("mis datos")) {
+            navData.put("route", "/user");
+            navData.put("target", "Mi Perfil");
+            navData.put("autoRedirect", true);
+            response.setActionData(navData);
+            response.setMessage("🚀 Abriendo tu **Perfil de Usuario**...");
+            return response;
+        }
+
+        // Si pidió perfil pero no especificó a quién
+        if (normMsg.contains("perfil")) {
+            if (isAdmin) {
+                navData.put("route", "/users");
+                navData.put("target", "Lista de Usuarios");
+                navData.put("autoRedirect", true);
+                response.setActionData(navData);
+                response.setMessage("🚀 No especificaste a qué cliente ir. Te llevo a la **Lista de Clientes** para que selecciones el perfil que deseas ver.");
+                return response;
+            } else {
+                navData.put("route", "/user");
+                navData.put("target", "Mi Perfil");
+                navData.put("autoRedirect", true);
+                response.setActionData(navData);
+                response.setMessage("🚀 Te llevo a tu **Perfil de Cliente**...");
+                return response;
+            }
+        }
+
+        response.setRequiresAction(false);
+        response.setMessage("¿A qué sección te gustaría que te lleve? Puedes decirme: *Llévame a ventas*, *Llévame al perfil de [Cliente]*, *Llévame a cobranzas*, *Llévame a nueva venta* o *Llévame a evaluación IA*.");
+        return response;
+    }
+
+    private boolean esConsultaProyeccionFutura(String msg) {
+        return (msg.contains("dentro de") || msg.contains("en ") || msg.contains("de aca a") || msg.contains("proyeccion")) &&
+               (msg.contains("mes") || msg.contains("meses") || msg.contains("dia") || msg.contains("dias") || msg.contains("ano") || msg.contains("anos")) &&
+               (msg.contains("debera") || msg.contains("debe") || msg.contains("deuda") || msg.contains("cuanto") || msg.contains("pagara"));
+    }
+
+    private ChatResponse procesarProyeccionFutura(String rawMsg, String normMsg, boolean isAdmin) {
+        int meses = 0;
+        Pattern pMeses = Pattern.compile("(?:dentro de|en|de aca a|a)\\s+(\\d+)\\s+mes(?:es)?");
+        Matcher mMeses = pMeses.matcher(normMsg);
+        if (mMeses.find()) {
+            meses = Integer.parseInt(mMeses.group(1));
+        }
+
+        if (meses <= 0) {
+            Pattern pNum = Pattern.compile("(\\d+)\\s+mes(?:es)?");
+            Matcher mNum = pNum.matcher(normMsg);
+            if (mNum.find()) {
+                meses = Integer.parseInt(mNum.group(1));
+            }
+        }
+
+        if (meses <= 0) {
+            meses = 1;
+        }
+
+        User cliente = null;
+        if (isAdmin) {
+            cliente = detectarClienteEnMensaje(rawMsg, normMsg);
+            if (cliente == null) {
+                ChatResponse response = new ChatResponse();
+                response.setSuccess(true);
+                response.setMessage("Para calcular la proyección a " + meses + " meses, indícame de qué cliente deseas consultar (por ejemplo: *¿Cuánto me deberá Anthony dentro de " + meses + " meses?*).");
+                return response;
+            }
+        } else {
+            return buildSecurityDeniedResponse();
+        }
+
+        Long clienteId = Long.valueOf(cliente.getId());
+        List<Cuota> todasCuotas = cuotaRepository.findCuotasByClienteIdOrdered(clienteId);
+
+        if (todasCuotas == null || todasCuotas.isEmpty()) {
+            ChatResponse response = new ChatResponse();
+            response.setSuccess(true);
+            response.setMessage("El cliente **" + cliente.getName() + " " + cliente.getLastname() + "** no tiene ventas a crédito registradas para realizar una proyección.");
+            return response;
+        }
+
+        LocalDate hoy = LocalDate.now();
+        LocalDate fechaProyectada = hoy.plusMonths(meses);
+
+        List<Cuota> pendientesHoy = todasCuotas.stream()
+                .filter(c -> c.getEstado() == Cuota.EstadoCuota.PENDIENTE || c.getEstado() == Cuota.EstadoCuota.VENCIDO)
+                .collect(Collectors.toList());
+
+        BigDecimal deudaActualTotal = pendientesHoy.stream()
+                .map(Cuota::getMonto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        List<Cuota> cuotasRestantesFuturas = pendientesHoy.stream()
+                .filter(c -> c.getFechaVencimiento().isAfter(fechaProyectada))
+                .collect(Collectors.toList());
+
+        BigDecimal deudaRestanteFutura = cuotasRestantesFuturas.stream()
+                .map(Cuota::getMonto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        List<Cuota> cuotasPorVencerEnElPeriodo = pendientesHoy.stream()
+                .filter(c -> !c.getFechaVencimiento().isAfter(fechaProyectada))
+                .collect(Collectors.toList());
+
+        BigDecimal montoQueDebeAbonarEnPeriodo = cuotasPorVencerEnElPeriodo.stream()
+                .map(Cuota::getMonto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📊 **Proyección Financiera a ").append(meses).append(" Meses - Comercial Reyes**\n\n");
+        sb.append("• 👤 **Cliente:** **").append(cliente.getName()).append(" ").append(cliente.getLastname()).append("**\n");
+        sb.append("• 🗓️ **Fecha proyectada:** **").append(fechaProyectada.format(DATE_FORMATTER)).append("**\n");
+        sb.append("• 💰 **Deuda total actual hoy:** S/. ").append(deudaActualTotal.setScale(2)).append("\n\n");
+
+        if (deudaActualTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            sb.append("Actualmente el cliente **no tiene deuda pendiente**. Dentro de ").append(meses).append(" meses seguirá debiendo **S/. 0.00** a menos que realice nuevas compras a crédito.");
+        } else if (cuotasRestantesFuturas.isEmpty()) {
+            Cuota ultima = pendientesHoy.get(pendientesHoy.size() - 1);
+            sb.append("✅ **El cronograma de crédito concluye antes de esa fecha** (última cuota el **")
+              .append(ultima.getFechaVencimiento().format(DATE_FORMATTER)).append("**).\n\n");
+            sb.append("Si ").append(cliente.getName()).append(" cumple puntualmente con su cronograma de pagos, dentro de **").append(meses).append(" meses**:\n");
+            sb.append("• 🏁 **Deuda remanente estimada:** **S/. 0.00** (Crédito totalmente cancelado).\n");
+            sb.append("• 💵 **Total que habrá amortizado en este período:** **S/. ").append(montoQueDebeAbonarEnPeriodo.setScale(2)).append("** (").append(cuotasPorVencerEnElPeriodo.size()).append(" cuotas).\n");
+        } else {
+            sb.append("Si ").append(cliente.getName()).append(" realiza sus pagos según el cronograma regular, dentro de **").append(meses).append(" meses**:\n\n");
+            sb.append("• 💵 **Deuda remanente estimada:** **S/. ").append(deudaRestanteFutura.setScale(2)).append("**\n");
+            sb.append("• 📑 **Cuotas que le restarán por pagar:** **").append(cuotasRestantesFuturas.size()).append(" cuota(s)**\n");
+            sb.append("• 💳 **Monto que habrá amortizado hasta esa fecha:** S/. ").append(montoQueDebeAbonarEnPeriodo.setScale(2)).append(" (").append(cuotasPorVencerEnElPeriodo.size()).append(" cuotas abonadas)\n\n");
+            sb.append("⚠️ *Nota: Esta proyección asume cumplimiento regular sin moras añadidas ni pagos adelantados.*");
+        }
+
+        List<Map<String, Object>> filasProyeccion = new ArrayList<>();
+        Map<String, Object> fila = new LinkedHashMap<>();
+        fila.put("cliente", cliente.getName() + " " + cliente.getLastname());
+        fila.put("periodo", meses + " meses (" + fechaProyectada.format(DATE_FORMATTER) + ")");
+        fila.put("deudaActual", "S/. " + deudaActualTotal.setScale(2));
+        fila.put("amortizacionEsperada", "S/. " + montoQueDebeAbonarEnPeriodo.setScale(2));
+        fila.put("deudaProyectada", "S/. " + deudaRestanteFutura.setScale(2));
+        filasProyeccion.add(fila);
+
+        ChatResponse response = new ChatResponse();
+        response.setSuccess(true);
+        response.setMessage(sb.toString());
+        response.setRequiresAction(true);
+        response.setActionType("QUERY");
+        response.setActionData(filasProyeccion);
+        return response;
+    }
+
     private User detectarClienteEnMensaje(String rawMsg, String normMsg) {
+        if (normMsg == null || normMsg.isBlank()) return null;
+
+        // 1. DNI directo (8 dígitos)
         Pattern dniPattern = Pattern.compile("\\b([0-9]{8})\\b");
         Matcher dniMatcher = dniPattern.matcher(rawMsg);
         if (dniMatcher.find()) {
-            Optional<User> u = userRepository.findByDni(dniMatcher.group(1));
+            Optional<User> u = userRepository.findFirstByDni(dniMatcher.group(1));
             if (u.isPresent()) return u.get();
         }
 
-        String posibleNombre = extraerPosibleNombre(normMsg);
-        if (posibleNombre != null && posibleNombre.length() >= 3) {
-            List<User> users = userRepository.findAll();
-            if (users != null && !users.isEmpty()) {
-                String busqueda = posibleNombre.trim().toLowerCase();
-                String[] terminosBusqueda = busqueda.split("\\s+");
+        List<User> users = userRepository.findAll();
+        if (users == null || users.isEmpty()) {
+            return null;
+        }
 
-                User mejorCandidato = null;
-                int maxCoincidencias = 0;
-                int maxScore = 0;
+        // 2. Coincidencia exacta de nombre completo en el mensaje normalizado
+        User mejorCoincidenciaNombreCompleto = null;
+        int maxLongitudNombreCompleto = 0;
 
-                for (User u : users) {
-                    String uNombre = normalizeText(u.getName());
-                    String uApellido = normalizeText(u.getLastname());
-                    String uCompleto = (uNombre + " " + uApellido).trim();
+        for (User u : users) {
+            String uNombre = normalizeText(u.getName());
+            String uApellido = normalizeText(u.getLastname());
+            String uCompleto = (uNombre + " " + uApellido).trim();
 
-                    // Coincidencia exacta total: prioridad máxima
-                    if (uCompleto.equals(busqueda)) {
-                        return u;
-                    }
-
-                    // Puntuación por coincidencia de palabras completas
-                    int score = 0;
-                    int coincidencias = 0;
-                    String[] partesUsuario = uCompleto.split("\\s+");
-
-                    for (String termino : terminosBusqueda) {
-                        if (termino.length() < 2) continue;
-                        for (String parte : partesUsuario) {
-                            if (parte.equals(termino)) {
-                                score += 10;
-                                coincidencias++;
-                            } else if (parte.startsWith(termino) || parte.contains(termino)) {
-                                score += 4;
-                            }
-                        }
-                    }
-
-                    // Bonificación si el nombre completo del usuario contiene la búsqueda entera o viceversa
-                    if (uCompleto.contains(busqueda)) {
-                        score += 8;
-                    } else if (busqueda.contains(uCompleto)) {
-                        score += 8;
-                    }
-
-                    if (score > maxScore && score >= 8) {
-                        maxScore = score;
-                        maxCoincidencias = coincidencias;
-                        mejorCandidato = u;
-                    }
-                }
-
-                if (mejorCandidato != null) {
-                    return mejorCandidato;
+            if (!uCompleto.isBlank() && normMsg.contains(uCompleto)) {
+                if (uCompleto.length() > maxLongitudNombreCompleto) {
+                    maxLongitudNombreCompleto = uCompleto.length();
+                    mejorCoincidenciaNombreCompleto = u;
                 }
             }
+        }
+
+        if (mejorCoincidenciaNombreCompleto != null) {
+            return mejorCoincidenciaNombreCompleto;
+        }
+
+        // 3. Extracción de tokens de búsqueda descartando palabras vacías (stopwords del negocio)
+        Set<String> stopwords = Set.of(
+            "cuantos", "cuanto", "cuantas", "cuanta", "pagos", "pago", "se", "ha", "hecho", "hizo",
+            "hicieron", "abonos", "abono", "debe", "debera", "deberia", "deuda", "deudas", "historial",
+            "cliente", "clientes", "senor", "senora", "don", "dona", "llevame", "llevarme", "ir",
+            "perfil", "notifica", "notificar", "notifiques", "notificacion", "avisa", "avisale",
+            "recordale", "recuerdale", "cobrale", "el", "la", "los", "las", "un", "una", "al", "del",
+            "a", "de", "por", "favor", "ver", "mostrar", "mostrame", "dime", "cuenta", "puedes",
+            "dentro", "mes", "meses", "dia", "dias", "que", "su", "en", "para", "como", "esta", "estado"
+        );
+
+        String posibleNombre = extraerPosibleNombre(normMsg);
+        String textoAnalisis = (posibleNombre != null && posibleNombre.length() >= 3) ? posibleNombre : normMsg;
+
+        String[] tokensRaw = textoAnalisis.split("[^a-z0-9]+");
+        List<String> tokensBusqueda = new ArrayList<>();
+        for (String t : tokensRaw) {
+            if (t.length() >= 2 && !stopwords.contains(t)) {
+                tokensBusqueda.add(t);
+            }
+        }
+
+        if (tokensBusqueda.isEmpty()) {
+            return null;
+        }
+
+        // 4. Scoring Multi-Token con Tolerancia a Tipografías (Levenshtein)
+        User mejorCandidato = null;
+        int maxScore = 0;
+
+        for (User u : users) {
+            String uNombre = normalizeText(u.getName());
+            String uApellido = normalizeText(u.getLastname());
+            String uCompleto = (uNombre + " " + uApellido).trim();
+            if (uCompleto.isBlank()) continue;
+
+            String[] partesUsuario = uCompleto.split("\\s+");
+            int score = 0;
+            int tokensEmparejados = 0;
+
+            for (String q : tokensBusqueda) {
+                if (q.length() < 2) continue;
+                boolean matched = false;
+
+                for (String parte : partesUsuario) {
+                    if (parte.isBlank()) continue;
+
+                    // Match exacto de palabra
+                    if (parte.equals(q)) {
+                        score += 30;
+                        matched = true;
+                        break;
+                    }
+                    // Match con prefijo o sufijo
+                    else if (parte.startsWith(q) || q.startsWith(parte)) {
+                        score += 18;
+                        matched = true;
+                        break;
+                    }
+                    // Match difuso por Levenshtein (ejemplo: 'cueva' vs 'prueba')
+                    else {
+                        int dist = calcularDistanciaLevenshtein(q, parte);
+                        int maxLen = Math.max(q.length(), parte.length());
+                        if (dist <= 1 && maxLen >= 3) {
+                            score += 20;
+                            matched = true;
+                            break;
+                        } else if (dist <= 2 && maxLen >= 5) {
+                            score += 15;
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (matched) {
+                    tokensEmparejados++;
+                }
+            }
+
+            // Bonificación por cobertura múltiple (más de un token coincide)
+            if (tokensEmparejados >= 2) {
+                score += (tokensEmparejados * 25);
+            } else if (tokensEmparejados == 1 && partesUsuario.length > 1 && tokensBusqueda.size() > 1) {
+                // Penalizar si solo emparejó 1 palabra común de varias en la búsqueda
+                score -= 10;
+            }
+
+            if (score > maxScore) {
+                maxScore = score;
+                mejorCandidato = u;
+            }
+        }
+
+        // Umbral de corte mínimo
+        if (mejorCandidato != null && maxScore >= 25) {
+            return mejorCandidato;
         }
 
         return null;
     }
 
+    private int calcularDistanciaLevenshtein(String s1, String s2) {
+        if (s1 == null) s1 = "";
+        if (s2 == null) s2 = "";
+        int len1 = s1.length();
+        int len2 = s2.length();
+        int[][] dp = new int[len1 + 1][len2 + 1];
+
+        for (int i = 0; i <= len1; i++) dp[i][0] = i;
+        for (int j = 0; j <= len2; j++) dp[0][j] = j;
+
+        for (int i = 1; i <= len1; i++) {
+            for (int j = 1; j <= len2; j++) {
+                int cost = (s1.charAt(i - 1) == s2.charAt(j - 1)) ? 0 : 1;
+                dp[i][j] = Math.min(
+                    Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
+                    dp[i - 1][j - 1] + cost
+                );
+            }
+        }
+        return dp[len1][len2];
+    }
+
     private String extraerPosibleNombre(String normMsg) {
+        if (normMsg == null) return null;
+
         String[] patrones = {
+            "cuantos pagos se ha hecho ([a-z\\s]+)",
+            "cuantos pagos ha hecho ([a-z\\s]+)",
+            "cuantos pagos tiene ([a-z\\s]+)",
+            "pagos que ha hecho ([a-z\\s]+)",
+            "pagos de ([a-z\\s]+)",
+            "pagos del cliente ([a-z\\s]+)",
+            "abonos de ([a-z\\s]+)",
+            "llevame los pagos que ha hecho ([a-z\\s]+)",
+            "llevame a los pagos que ha hecho ([a-z\\s]+)",
+            "llevame a los pagos de ([a-z\\s]+)",
+            "llevame a los abonos de ([a-z\\s]+)",
+            "llevame al perfil de ([a-z\\s]+)",
+            "llevame al cliente ([a-z\\s]+)",
+            "llevame a ([a-z\\s]+)",
+            "notifiques el pago a ([a-z\\s]+)",
+            "notifiques la deuda a ([a-z\\s]+)",
+            "notifiques a ([a-z\\s]+)",
+            "notificar a ([a-z\\s]+)",
+            "notifica a ([a-z\\s]+)",
+            "notificacion a ([a-z\\s]+)",
+            "envies una notificacion a ([a-z\\s]+)",
+            "envies un notificacion a ([a-z\\s]+)",
+            "enviale una notificacion a ([a-z\\s]+)",
+            "enviale un notificacion a ([a-z\\s]+)",
+            "enviar notificacion a ([a-z\\s]+)",
+            "avisale a ([a-z\\s]+)",
+            "avisa a ([a-z\\s]+)",
+            "cobrale a ([a-z\\s]+)",
+            "recordale a ([a-z\\s]+)",
+            "recuerdale a ([a-z\\s]+)",
             "cuanto debe ([a-z\\s]+)",
             "cuantas cuotas debe ([a-z\\s]+)",
+            "cuanto me debera ([a-z\\s]+)",
+            "cuanto debera ([a-z\\s]+)",
             "desde cuando no paga ([a-z\\s]+)",
             "desde cuando debe ([a-z\\s]+)",
             "deuda de ([a-z\\s]+)",
             "cuotas de ([a-z\\s]+)",
             "estado de ([a-z\\s]+)",
-            "cliente ([a-z\\s]+)"
+            "perfil de ([a-z\\s]+)",
+            "perfil del cliente ([a-z\\s]+)",
+            "perfil ([a-z\\s]+)",
+            "cliente ([a-z\\s]+)",
+            "usuario ([a-z\\s]+)"
         };
 
         for (String p : patrones) {
@@ -1037,7 +1617,8 @@ public class ChatbotServiceImpl implements ChatbotService {
             Matcher m = pattern.matcher(normMsg);
             if (m.find()) {
                 String match = m.group(1).trim();
-                match = match.replaceAll("\\b(el|la|los|las|un|una|sr|sra|don|dona|por favor|dime)\\b", "").trim();
+                match = match.replaceAll("(?i)\\s+(?:que su deuda|que debe|que ya vencio|que tiene|dentro de|en|de aca a|a)\\b.*", "").trim();
+                match = match.replaceAll("\\b(el|la|los|las|un|una|sr|sra|don|dona|por favor|dime|puedes|llevarme|llevame|ver|ir|al)\\b", "").trim();
                 if (match.length() >= 3) return match;
             }
         }

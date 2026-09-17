@@ -11,6 +11,8 @@ public interface PagoService {
 
     Pago registrarPagoConComprobante(Long cuotaId, org.springframework.web.multipart.MultipartFile comprobante);
 
+    Pago registrarPagoConComprobante(Long cuotaId, org.springframework.web.multipart.MultipartFile comprobante, String metodoPago);
+
     Pago validarPago(Long pagoId, String nuevoEstado, String motivoRechazo);
 
     List<Pago> obtenerPagosPorCuota(Long cuotaId);
